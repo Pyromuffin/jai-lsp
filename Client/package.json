@@ -1,0 +1,42 @@
+{
+    "name": "client",
+    "displayName": "Client",
+    "description": "jai lsp client",
+    "publisher": "pyromuffin",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.41.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "contributes": {
+        "languages": [
+            {
+            "id": "jai",
+            "extensions": [
+                "jai"
+            ]
+            }
+        ]
+    },
+    "activationEvents": [
+        "onLanguage:jai"
+    ],
+    "main": "./out/extension",
+    "scripts": {
+        "vscode:prepublish": "tsc -p ./",
+        "compile": "tsc -p ./",
+        "update-vscode": "node ./node_modules/vscode/bin/install",
+        "postinstall": "node ./node_modules/vscode/bin/install"
+    },
+    "devDependencies": {
+        "@types/mocha": "^7.0.2",
+        "@types/node": "^13.11.1",
+        "typescript": "^3.8.3",
+        "vscode": "^1.1.36"
+    },
+    "dependencies": {
+        "vscode-languageclient": "^6.2.0-next.2"
+    }
+}
