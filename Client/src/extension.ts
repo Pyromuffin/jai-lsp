@@ -41,15 +41,15 @@ export function activate(context: ExtensionContext) {
         progressOnInitialization: true,
         synchronize: {
             // Synchronize the setting section 'languageServerExample' to the server
-            configurationSection: "languageServerExample",
+            configurationSection: "jai_lsp",
             fileEvents: workspace.createFileSystemWatcher("**/*.jai")
         }
     };
 
     // Create the language client and start the client.
     const client = new LanguageClient(
-        "languageServerExample",
-        "Language Server Example",
+        "jai_lsp",
+        "jai language server",
         serverOptions,
         clientOptions
     );
@@ -61,7 +61,8 @@ export function activate(context: ExtensionContext) {
     // client can be deactivated on extension deactivation
     context.subscriptions.push(disposable);
 
-/*
+
+    /*
     const tokenTypes = ['class', 'interface', 'enum', 'function', 'variable'];
     const tokenModifiers = ['declaration', 'documentation'];
     const legend = new vscode.SemanticTokensLegend(tokenTypes, tokenModifiers);

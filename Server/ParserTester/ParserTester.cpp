@@ -3,10 +3,45 @@
 #define _CRT_SECURE_NO_WARNINGS
 #include <iostream>
 
+enum class TokenType
+{
+	Documentation,
+	Label,
+	Parameter,
+	Variable,
+	Macro,
+	Property,
+	Function,
+	TypeParameter,
+	Enum,
+	Interface,
+	Member,
+	Struct,
+	Class,
+	Keyword,
+	String,
+	Number,
+	Comment,
+	Operator,
+	Namespace,
+	Type,
+	Regexp,
+};
+
+struct SemanticToken
+{
+	int line;
+	int col;
+	int length;
+	TokenType type;
+	int modifier;
+};
+
+
 extern "C"
 {
     int Init();
-    char* Parse(const char* code);
+	const char* GetCompletionItems(const char* code, int row, int col);
 }
 
 const char* path = "C:\\Users\\pyrom\\Desktop\\jai\\how_to\\001_first.jai";
@@ -15,24 +50,24 @@ char buffer[10000];
 
 int main()
 {
-    Init();
+	Init();
 
-    auto file = fopen(path, "r");
-    int i = 0;
+	auto file = fopen(path, "r");
+	int i = 0;
 
-    while (1) {
-        auto c = fgetc(file);
-        if (feof(file)) {
-            break;
-        }
-        buffer[i++] = c;
-    }
+	while (1) {
+		auto c = fgetc(file);
+		if (feof(file)) {
+			break;
+		}
+		buffer[i++] = c;
+	}
 
-    buffer[i] = '\0';
+	buffer[i] = '\0';
 
-    auto result = Parse(buffer);
+	auto items = GetCompletionItems(buffer, 102, 0);
 
-    std::cout << "Hello World!\n";
+	std::cout << items;
 }
 
 // Run program: Ctrl + F5 or Debug > Start Without Debugging menu

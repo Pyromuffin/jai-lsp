@@ -32,10 +32,11 @@ namespace jai_lsp
         private SynchronizationCapability _capability;
 
         public TextDocumentHandler(ILogger<TextDocumentHandler> logger, Logjam foo,
-            ILanguageServerConfiguration configuration)
+            ILanguageServerConfiguration configuration, BufferManager bufferManager)
         {
             _logger = logger;
             _configuration = configuration;
+            _bufferManager = bufferManager;
         }
 
         public TextDocumentSyncKind Change { get; } = TextDocumentSyncKind.Full;

@@ -13,10 +13,10 @@
     "contributes": {
         "languages": [
             {
-            "id": "jai",
-            "extensions": [
-                "jai"
-            ]
+                "id": "jai",
+                "extensions": [
+                    "jai"
+                ]
             }
         ]
     },

@@ -9,12 +9,6 @@ namespace jai_lsp
 {
     internal class CompletionHandler : ICompletionHandler
     {
-        private const string PackageReferenceElement = "PackageReference";
-        private const string IncludeAttribute = "Include";
-        private const string VersionAttribute = "Version";
-        private static readonly char[] EndElement = new[] { '>' };
-
-        private readonly ILanguageServer _router;
         private readonly BufferManager _bufferManager;
 
         private readonly DocumentSelector _documentSelector = new DocumentSelector(
@@ -26,9 +20,8 @@ namespace jai_lsp
 
         private CompletionCapability _capability;
 
-        public CompletionHandler(ILanguageServer router, BufferManager bufferManager)
+        public CompletionHandler(BufferManager bufferManager)
         {
-            _router = router;
             _bufferManager = bufferManager;
         }
 
@@ -52,8 +45,8 @@ namespace jai_lsp
             {
                 return new CompletionList();
             }
-
-            var names = TreeSitter.CoolParse(text);
+            var pos = request.Position;
+            var names = TreeSitter.CoolParse(text, pos.Line, pos.Character);
             var nameList = names.Split(",");
             List<CompletionItem> items = new List<CompletionItem>(nameList.Length);
             
@@ -138,16 +131,6 @@ namespace jai_lsp
 
             return new CompletionList();
             */
-        }
-
-        private static int GetPosition(string buffer, int line, int col)
-        {
-            var position = 0;
-            for (var i = 0; i < line; i++)
-            {
-                position = buffer.IndexOf('\n', position) + 1;
-            }
-            return position + col;
         }
 
         public void SetCapability(CompletionCapability capability)

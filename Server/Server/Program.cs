@@ -91,6 +91,7 @@ namespace jai_lsp
                             Section = "terminal",
                         });
                     })
+                    /*
                     .OnInitialize(async (server, request, token) => {
                         var manager = server.ProgressManager.WorkDone(request, new WorkDoneProgressBegin()
                         {
@@ -160,6 +161,7 @@ namespace jai_lsp
                         logger.LogInformation("Scoped Config: {Config}", scopedConfig);
 
                     })
+                    */
             );
 
             await server.WaitForExit;

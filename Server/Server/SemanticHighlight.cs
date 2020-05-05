@@ -6,6 +6,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Document.Server.Proposals;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models.Proposals;
 using System;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -13,14 +14,93 @@ using System.Threading.Tasks;
 
 namespace jai_lsp
 {
+    public enum TokenType
+    {
+        Documentation,
+	    Comment,
+	    Keyword,
+	    String,
+	    Number,
+	    Regexp,
+	    Operator,
+	    Namespace,
+	    Type,
+	    Struct,
+	    Class,
+	    Interface,
+	    Enum,
+	    TypeParameter,
+	    Function,
+	    Member,
+	    Property,
+	    Macro,
+	    Variable,
+	    Parameter,
+	    Label,
+        EnumMember,
+    }
+
+    public enum TokenModifier
+    {
+        Documentation,
+	    Declaration,
+	    Definition,
+	    Static,
+	    Abstract,
+	    Deprecated,
+	    Readonly,
+    }
+
+
     class SemanticHighlight : SemanticTokensHandler
     {
-        ILogger _logger;
+        static string[] typeNames =
+        {
+        "documentation",
+        "comment",
+        "keyword",
+        "string",
+        "number",
+        "regexp",
+        "operator",
+        "namespace",
+        "type",
+        "struct",
+        "class",
+        "interface",
+        "enum",
+        "typeParameter",
+        "function",
+        "member",
+        "property",
+        "macro",
+        "variable",
+        "parameter",
+        "label",
+        "enumMember"
+        };
 
-        public SemanticHighlight(ILogger<SemanticTokens> logger) : base(new SemanticTokensRegistrationOptions()
+        static string[] modifierNames =
+        {
+           "documentation",
+           "declaration",
+           "definition",
+           "static",
+           "abstract",
+           "deprecated",
+           "readonly",
+        };
+
+        ILogger _logger;
+        BufferManager _bufferManager;
+
+        public SemanticHighlight(ILogger<SemanticTokens> logger, BufferManager bufferManager) : base(new SemanticTokensRegistrationOptions()
         {
             DocumentSelector = DocumentSelector.ForLanguage("jai"),
-            Legend = new SemanticTokensLegend(),
+            Legend = new SemanticTokensLegend() {
+                TokenTypes = typeNames,
+                TokenModifiers = modifierNames,
+            },
             DocumentProvider = new Supports<SemanticTokensDocumentProviderOptions>(true,
                   new SemanticTokensDocumentProviderOptions()
                   {
@@ -29,18 +109,32 @@ namespace jai_lsp
             RangeProvider = false
         })
         {
+            _bufferManager = bufferManager;
             _logger = logger;
         }
 
         protected override Task<SemanticTokensDocument> GetSemanticTokensDocument(ITextDocumentIdentifierParams @params, CancellationToken cancellationToken)
         {
+           // var legend = new SemanticTokensLegend();
+           // legend.TokenTypes = Enum.GetNames(typeof(TokenType);
+
             return Task.FromResult(new SemanticTokensDocument(GetRegistrationOptions().Legend));
         }
 
-        protected override Task Tokenize(SemanticTokensBuilder builder, ITextDocumentIdentifierParams identifier, CancellationToken cancellationToken)
+        unsafe protected override Task Tokenize(SemanticTokensBuilder builder, ITextDocumentIdentifierParams identifier, CancellationToken cancellationToken)
         {
+            var text = _bufferManager.GetBuffer(identifier.TextDocument.Uri.ToString());
+            
+            if (text == null)
+                return Unit.Task;
 
-            builder.Push(1, 0, 10, 1, 1);
+            TreeSitter.GetTokens(text, out var tokensPtr, out var count);
+            
+            for (int i = 0; i < count; i++)
+            {
+                builder.Push(tokensPtr[i].line, tokensPtr[i].col, tokensPtr[i].length, (int)tokensPtr[i].type, (int)tokensPtr[i].modifier);
+            }
+            
             return Unit.Task;
         }
     }

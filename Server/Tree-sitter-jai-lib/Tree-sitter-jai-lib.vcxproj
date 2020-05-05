@@ -107,6 +107,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>C:\Users\pyrom\Documents\tree-sitter-jai\src\tree_sitter;C:\Users\pyrom\Documents\GitHub\tree-sitter\lib\include;C:\Users\pyrom\Documents\GitHub\tree-sitter\lib\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
