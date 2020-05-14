@@ -92,9 +92,8 @@ namespace jai_lsp
         };
 
         ILogger _logger;
-        BufferManager _bufferManager;
 
-        public SemanticHighlight(ILogger<SemanticTokens> logger, BufferManager bufferManager) : base(new SemanticTokensRegistrationOptions()
+        public SemanticHighlight(ILogger<SemanticTokens> logger) : base(new SemanticTokensRegistrationOptions()
         {
             DocumentSelector = DocumentSelector.ForLanguage("jai"),
             Legend = new SemanticTokensLegend() {
@@ -109,7 +108,6 @@ namespace jai_lsp
             RangeProvider = false
         })
         {
-            _bufferManager = bufferManager;
             _logger = logger;
         }
 
@@ -121,21 +119,24 @@ namespace jai_lsp
             return Task.FromResult(new SemanticTokensDocument(GetRegistrationOptions().Legend));
         }
 
-        unsafe protected override Task Tokenize(SemanticTokensBuilder builder, ITextDocumentIdentifierParams identifier, CancellationToken cancellationToken)
+        async protected override Task Tokenize(SemanticTokensBuilder builder, ITextDocumentIdentifierParams identifier, CancellationToken cancellationToken)
         {
-            var text = _bufferManager.GetBuffer(identifier.TextDocument.Uri.ToString());
-            
-            if (text == null)
-                return Unit.Task;
+            var now = DateTime.Now;
+            IntPtr tokensPtr = IntPtr.Zero;
+            int count = 0;
+            long internalMicros = await Task.Run( () => TreeSitter.GetTokens(identifier.TextDocument.Uri.GetFileSystemPath(), out tokensPtr, out count), cancellationToken);
+            var then = DateTime.Now;
+            var elapsed = then - now;
+            _logger.LogInformation("Elapsed time for C++ tokens: " + elapsed.TotalMilliseconds + " native time: " + internalMicros);
 
-            TreeSitter.GetTokens(text, out var tokensPtr, out var count);
-            
-            for (int i = 0; i < count; i++)
+            unsafe
             {
-                builder.Push(tokensPtr[i].line, tokensPtr[i].col, tokensPtr[i].length, (int)tokensPtr[i].type, (int)tokensPtr[i].modifier);
+                SemanticToken* ptr = (SemanticToken*)tokensPtr;
+                for (int i = 0; i < count; i++)
+                {
+                    builder.Push(ptr[i].line, ptr[i].col, ptr[i].length, (int)ptr[i].type, (int)ptr[i].modifier);
+                }
             }
-            
-            return Unit.Task;
         }
     }
 }

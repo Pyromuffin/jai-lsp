@@ -1,9 +1,5 @@
-﻿using OmniSharp.Extensions.LanguageServer.Protocol.Models.Proposals;
-using System;
-using System.Collections.Generic;
-using System.Data;
+﻿using System;
 using System.Runtime.InteropServices;
-using System.Text;
 
 namespace jai_lsp
 {
@@ -16,6 +12,16 @@ namespace jai_lsp
         public TokenType type;
         public TokenModifier modifier;
     };
+
+    [StructLayout(LayoutKind.Sequential)]
+    unsafe struct Gap
+    {
+        byte* before;
+        int beforeLength;
+        byte* after;
+        int afterLength;
+
+    }
 
 
     class TreeSitter
@@ -34,11 +40,24 @@ namespace jai_lsp
             return Marshal.PtrToStringAnsi(ptr);
         }
 
-        [DllImport(dllpath)]
-        unsafe extern static public void GetTokens([MarshalAs(UnmanagedType.LPStr)] string code, out SemanticToken* tokens, out int count);
 
         [DllImport(dllpath)]
-        extern static public int FreeTokens([In, Out] SemanticToken[] tokens);
+        extern static public long CreateTreeFromPath([MarshalAs(UnmanagedType.LPStr)] string document, [MarshalAs(UnmanagedType.LPStr)] string moduleName);
+
+        [DllImport(dllpath)]
+        extern static public long CreateTree([MarshalAs(UnmanagedType.LPStr)] string document, [MarshalAs(UnmanagedType.LPStr)] string code, int length);
+
+        [DllImport(dllpath)]
+        extern static public long UpdateTree([MarshalAs(UnmanagedType.LPStr)] string document);
+
+        [DllImport(dllpath)]
+        extern static public long EditTree([MarshalAs(UnmanagedType.LPStr)] string document, [MarshalAs(UnmanagedType.LPStr)] string change, int startLine, int startCol, int endLine, int endCol, int contentLength, int rangeLength);
+
+        [DllImport(dllpath)]
+        extern static public long GetTokens([MarshalAs(UnmanagedType.LPStr)] string document, out IntPtr tokens, out int count);
+
+        [DllImport(dllpath)]
+        unsafe extern static public long GetTokensW([MarshalAs(UnmanagedType.LPWStr)] string codew, int length, out SemanticToken* tokens, out int count);
 
     }
 }

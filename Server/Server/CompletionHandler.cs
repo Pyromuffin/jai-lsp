@@ -9,7 +9,6 @@ namespace jai_lsp
 {
     internal class CompletionHandler : ICompletionHandler
     {
-        private readonly BufferManager _bufferManager;
 
         private readonly DocumentSelector _documentSelector = new DocumentSelector(
             new DocumentFilter()
@@ -20,9 +19,8 @@ namespace jai_lsp
 
         private CompletionCapability _capability;
 
-        public CompletionHandler(BufferManager bufferManager)
+        public CompletionHandler()
         {
-            _bufferManager = bufferManager;
         }
 
         public CompletionRegistrationOptions GetRegistrationOptions()
@@ -36,6 +34,7 @@ namespace jai_lsp
 
         public async Task<CompletionList> Handle(CompletionParams request, CancellationToken cancellationToken)
         {
+            /*
             //_router.Window.LogInfo("Received Completion Request!");
        
             var documentPath = request.TextDocument.Uri.ToString();
@@ -58,79 +57,8 @@ namespace jai_lsp
             }
 
             return new CompletionList(items);
-            /*
-            var syntaxTree = Parser.Parse(buffer);
-
-            var position = GetPosition(buffer.GetText(0, buffer.Length),
-                (int)request.Position.Line,
-                (int)request.Position.Character);
-
-            var node = syntaxTree.FindNode(position);
-
-            var attribute = node.AncestorNodes().OfType<XmlAttributeSyntax>().FirstOrDefault();
-            if (attribute != null && node.ParentElement.Name.Equals(PackageReferenceElement))
-            {
-                if (attribute.Name.Equals(IncludeAttribute))
-                {
-                    var completions = await _nuGetService.GetPackages(attribute.Value);
-
-                    var diff = position - attribute.ValueNode.Start;
-
-                    return new CompletionList(completions.Select(x => new CompletionItem
-                    {
-                        Label = x,
-                        Kind = CompletionItemKind.Reference,
-                        TextEdit = new TextEdit
-                        {
-                            NewText = x,
-                            Range = new Range(
-                                new Position
-                                {
-                                    Line = request.Position.Line,
-                                    Character = request.Position.Character - diff + 1
-                                }, new Position
-                                {
-                                    Line = request.Position.Line,
-                                    Character = request.Position.Character - diff + attribute.ValueNode.Width - 1
-                                })
-                        }
-                    }), isIncomplete: completions.Count > 1);
-                }
-                else if (attribute.Name.Equals(VersionAttribute))
-                {
-                    var includeNode = node.ParentElement.Attributes.FirstOrDefault(x => x.Name.Equals(IncludeAttribute));
-
-                    if (includeNode != null && !string.IsNullOrEmpty(includeNode.Value))
-                    {
-                        var versions = await _nuGetService.GetPackageVersions(includeNode.Value, attribute.Value);
-
-                        var diff = position - attribute.ValueNode.Start;
-
-                        return new CompletionList(versions.Select(x => new CompletionItem
-                        {
-                            Label = x,
-                            Kind = CompletionItemKind.Reference,
-                            TextEdit = new TextEdit
-                            {
-                                NewText = x,
-                                Range = new Range(
-                                    new Position
-                                    {
-                                        Line = request.Position.Line,
-                                        Character = request.Position.Character - diff + 1
-                                    }, new Position
-                                    {
-                                        Line = request.Position.Line,
-                                        Character = request.Position.Character - diff + attribute.ValueNode.Width - 1
-                                    })
-                            }
-                        }));
-                    }
-                }
-            }
-
-            return new CompletionList();
             */
+            return new CompletionList();
         }
 
         public void SetCapability(CompletionCapability capability)

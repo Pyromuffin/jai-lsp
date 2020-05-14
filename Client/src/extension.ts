@@ -26,8 +26,8 @@ export function activate(context: ExtensionContext) {
     // If the extension is launched in debug mode then the debug server options are used
     // Otherwise the run options are used
     let serverOptions: ServerOptions = {
-        run: { command: serverExe, args: ['C:\\Users\\pyrom\\Documents\\GitHub\\jai-lsp\\Server\\Server\\bin\\Debug\\netcoreapp2.1\\jai-lsp-server.dll'] },
-        debug: { command: serverExe, args: ['C:\\Users\\pyrom\\Documents\\GitHub\\jai-lsp\\Server\\Server\\bin\\Debug\\netcoreapp2.1\\jai-lsp-server.dll'] }
+        run: { command: serverExe, args: ['C:\\Users\\pyrom\\Documents\\GitHub\\jai-lsp\\Server\\Server\\bin\\Release\\net5.0\\jai-lsp-server.dll'] },
+        debug: { command: serverExe, args: ['C:\\Users\\pyrom\\Documents\\GitHub\\jai-lsp\\Server\\Server\\bin\\Debug\\net5.0\\jai-lsp-server.dll'] }
     }
 
     // Options to control the language client

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using jai_lsp;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using OmniSharp.Extensions.JsonRpc.Client;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
@@ -20,7 +21,6 @@ namespace jai_lsp
     {
         private readonly ILogger<TextDocumentHandler> _logger;
         private readonly ILanguageServerConfiguration _configuration;
-        private BufferManager _bufferManager;
 
         private readonly DocumentSelector _documentSelector = new DocumentSelector(
             new DocumentFilter()
@@ -32,22 +32,34 @@ namespace jai_lsp
         private SynchronizationCapability _capability;
 
         public TextDocumentHandler(ILogger<TextDocumentHandler> logger, Logjam foo,
-            ILanguageServerConfiguration configuration, BufferManager bufferManager)
+            ILanguageServerConfiguration configuration)
         {
             _logger = logger;
             _configuration = configuration;
-            _bufferManager = bufferManager;
         }
 
-        public TextDocumentSyncKind Change { get; } = TextDocumentSyncKind.Full;
+        public TextDocumentSyncKind Change { get; } = TextDocumentSyncKind.Incremental;
 
-        public Task<Unit> Handle(DidChangeTextDocumentParams request, CancellationToken token)
+        public async Task<Unit> Handle(DidOpenTextDocumentParams notification, CancellationToken token)
         {
-            var documentPath = request.TextDocument.Uri.ToString();
-            var text = request.ContentChanges.FirstOrDefault()?.Text;
-            _bufferManager.UpdateBuffer(documentPath, text);
+            await Task.Run(() => TreeSitter.CreateTree(notification.TextDocument.Uri.GetFileSystemPath(), notification.TextDocument.Text, notification.TextDocument.Text.Length));
+            return Unit.Value;
+        }
 
-            return Unit.Task;
+        public async Task<Unit> Handle(DidChangeTextDocumentParams request, CancellationToken token)
+        {
+            var documentPath = request.TextDocument.Uri.GetFileSystemPath();
+            foreach(var change in request.ContentChanges)
+            {
+                var range = change.Range;
+                var start = range.Start;
+                var end = range.End;
+
+                await Task.Run(() => TreeSitter.EditTree(documentPath, change.Text, start.Line, start.Character, end.Line, end.Character, change.Text.Length, change.RangeLength));
+            }
+
+            await Task.Run(() => TreeSitter.UpdateTree(documentPath));
+            return Unit.Value;
         }
 
         TextDocumentChangeRegistrationOptions IRegistration<TextDocumentChangeRegistrationOptions>.
@@ -63,14 +75,6 @@ namespace jai_lsp
         public void SetCapability(SynchronizationCapability capability)
         {
             _capability = capability;
-        }
-
-        public async Task<Unit> Handle(DidOpenTextDocumentParams notification, CancellationToken token)
-        {
-            await Task.Yield();
-            _logger.LogInformation("Hello world!");
-            await _configuration.GetScopedConfiguration(notification.TextDocument.Uri);
-            return Unit.Value;
         }
 
         TextDocumentRegistrationOptions IRegistration<TextDocumentRegistrationOptions>.GetRegistrationOptions()
@@ -105,7 +109,7 @@ namespace jai_lsp
             };
         }
 
-        public TextDocumentAttributes GetTextDocumentAttributes(Uri uri)
+        public TextDocumentAttributes GetTextDocumentAttributes(DocumentUri uri)
         {
             return new TextDocumentAttributes(uri, "jai");
         }

@@ -2,6 +2,9 @@
 //
 #define _CRT_SECURE_NO_WARNINGS
 #include <iostream>
+#include <chrono>
+#include <unordered_map>
+#include "../Tree-sitter-jai-lib/GapBuffer.h"
 
 enum class TokenType
 {
@@ -42,11 +45,120 @@ extern "C"
 {
     int Init();
 	const char* GetCompletionItems(const char* code, int row, int col);
+	long long GetTokens(const char* document, SemanticToken** outTokens, int* count);
+	const char* GetSyntax(const char* document);
+	long long CreateTree(const char* document, const char* code, int length);
+	long long UpdateTree(const char* document, const char* change, int line, int col, int contentLength, int replacementLength);
+	GapBuffer* GetGapBuffer(const char* document);
+
 }
 
-const char* path = "C:\\Users\\pyrom\\Desktop\\jai\\how_to\\001_first.jai";
+const char* path = "C:\\Users\\pyrom\\Desktop\\jai\\modules\\Basic\\Print.jai";
 
-char buffer[10000];
+char buffer[100000];
+
+static void EditReplaceTest()
+{
+	const char* originalCode =
+		"main :: () {\n"
+		"foo :: int;\n"
+		"}\n";
+
+	const char* changedCode =
+		"main :: () {\n"
+		"foo : int;\n"
+		"}\n";
+
+
+	//UpdateTree("tomato", originalCode, strlen(originalCode));
+	std::cout << GetSyntax("tomato") << "\n";
+
+//	UpdateTreeIncremental("tomato", changedCode, 1, 5, 18, -1);
+	std::cout << GetSyntax("tomato") << "\n";
+}
+
+static void SemanticTokensTest()
+{
+	/*
+	SemanticToken* tokens;
+	int count;
+	auto items = GetCompletionItems(buffer, 102, 0);
+
+
+	auto now = std::chrono::system_clock::now();
+	GetTokens(buffer, i -1, &tokens, &count);
+	auto then = std::chrono::system_clock::now();
+	auto duration = then - now;
+	auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration);
+
+	std::cout << "tokens duration: " << ms.count() << '\n';
+
+
+	for (int i = 0; i < count; i++)
+	{
+		std::cout << (int)tokens[i].type << '\n';
+	}
+
+	std::cout << items;
+	*/
+}
+static void GapBufferHashingTest()
+{
+	const char* codeA =
+		"main :: () {\n"
+		"foo :: int;\n"
+		"}\n";
+
+
+	const char* codeB =
+		"Zebra :: () {\n"
+		"main();\n"
+		"}\n";
+
+	auto gb1 = GapBuffer(codeA, strlen(codeA));
+	auto gb2 = GapBuffer(codeB, strlen(codeB));
+
+	auto bv1 = buffer_view();
+	bv1.buffer = &gb1;
+	bv1.length = 4;
+	bv1.start = 0;
+
+	auto bv2 = buffer_view();
+	bv2.buffer = &gb2;
+	bv2.length = 4;
+	bv2.start = 14;
+
+	std::cout << bv1.Copy() << "\n";
+	std::cout << bv2.Copy() << "\n";
+
+	std::unordered_map<buffer_view, int> map;
+	map[bv1] = 500;
+
+	std::cout << map[bv1] << "\n";
+	std::cout << map[bv2] << "\n";
+
+
+}
+
+
+static void GapBufferTest()
+{
+	const char* originalCode =
+		"main :: () {\n"
+		"foo :: int;\n"
+		"}\n";
+
+
+	CreateTree("tomato", originalCode, strlen(originalCode));
+	std::cout << GetSyntax("tomato") << "\n";
+
+	UpdateTree("tomato", "=", 1, 5, 1, 1);
+
+	GetGapBuffer("tomato")->PrintContents();
+
+	std::cout << GetSyntax("tomato") << "\n";
+}
+
 
 int main()
 {
@@ -64,10 +176,21 @@ int main()
 	}
 
 	buffer[i] = '\0';
+	
+	std::cout << CreateTree("tomato", buffer, i) << "\n";
+	std::cout << UpdateTree("tomato", "=", 100, 0, 1, 1) << "\n";
+	SemanticToken* tokens;
+	int count;
+	GetTokens("tomato", &tokens, &count);
 
-	auto items = GetCompletionItems(buffer, 102, 0);
+	for (int i = 0; i < count; i++)
+	{
+		std::cout << (int)tokens[i].type << "\n";
+	}
 
-	std::cout << items;
+
+	GapBufferHashingTest();
+
 }
 
 // Run program: Ctrl + F5 or Debug > Start Without Debugging menu

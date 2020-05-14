@@ -1,12 +1,17 @@
 ﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Server;
 using Serilog;
+using System.IO;
+using System.Reflection;
+using System.Linq;
+using System.Reactive.PlatformServices;
+using System.Reactive;
 
 namespace jai_lsp
 {
@@ -56,7 +61,7 @@ namespace jai_lsp
 
             Log.Logger.Information("This only goes file...");
 
-            IObserver<WorkDoneProgressReport> workDone = null;
+            //IObserver<WorkDoneProgressReport> workDone = null;
 
             var server = await LanguageServer.From(options =>
                 options
@@ -71,6 +76,7 @@ namespace jai_lsp
                     //.WithHandler<FoldingRangeHandler>()
                     //.WithHandler<MyWorkspaceSymbolsHandler>()
                     //.WithHandler<MyDocumentSymbolHandler>()
+                    .WithHandler<WorkspaceFolderChangeHandler>()
                     .WithHandler<SemanticHighlight>()
                     .WithServices(ConfigureServices)
                     .WithServices(x => x.AddLogging(b => b.SetMinimumLevel(LogLevel.Trace)))
@@ -82,13 +88,6 @@ namespace jai_lsp
                             logger.LogInformation("Configuring");
 
                             return new Logjam(logger);
-                        });
-                        services.AddSingleton(new ConfigurationItem()
-                        {
-                            Section = "typescript",
-                        }).AddSingleton(new ConfigurationItem()
-                        {
-                            Section = "terminal",
                         });
                     })
                     /*
@@ -124,7 +123,12 @@ namespace jai_lsp
                         });
                         workDone.OnCompleted();
                     })
+                    */
+                     
+
                     .OnStarted(async (languageServer, result, token) => {
+
+                        /*
                         using var manager = languageServer.ProgressManager.Create(new WorkDoneProgressBegin() { Title = "Doing some work..." });
 
                         manager.OnNext(new WorkDoneProgressReport() { Message = "doing things..." });
@@ -132,37 +136,41 @@ namespace jai_lsp
                         manager.OnNext(new WorkDoneProgressReport() { Message = "doing things... 1234" });
                         await Task.Delay(10000);
                         manager.OnNext(new WorkDoneProgressReport() { Message = "doing things... 56789" });
-                        
+
+                        */
+
+                        using var manager = languageServer.ProgressManager.Create(new WorkDoneProgressBegin() { Title = "Parsing Modules", Percentage = 0, Cancellable = true });
                         var logger = languageServer.Services.GetService<ILogger<Logjam>>();
-
-                        var configuration = await languageServer.Configuration.GetConfiguration(
-                            new ConfigurationItem()
-                            {
-                                Section = "typescript",
-                            }, new ConfigurationItem()
-                            {
-                                Section = "terminal",
-                            });
-
-                        var baseConfig = new JObject();
-                        foreach (var config in languageServer.Configuration.AsEnumerable())
+                        
+                        WorkspaceFolderParams wsf = new WorkspaceFolderParams();
+                        var wsfresults = await languageServer.Client.SendRequest(wsf, token);
+            
+                        foreach(var folder in wsfresults)
                         {
-                            baseConfig.Add(config.Key, config.Value);
+                            var path = Path.Combine(folder.Uri.GetFileSystemPath(), "modules");
+                            var moduleDirectories = Directory.EnumerateDirectories(path);
+                            var count = moduleDirectories.Count();
+                            int current = 0;
+                            foreach(var moduleDirectory in moduleDirectories)
+                            {
+                                var moduleFilePath = Path.Combine(moduleDirectory, "module.jai");
+                                var moduleName = Path.GetDirectoryName(moduleFilePath);
+                                var exists = File.Exists(moduleFilePath);
+                                if(exists)
+                                {
+                                    manager.OnNext(new WorkDoneProgressReport() { Message = moduleFilePath, Percentage = (double)current / count });
+                                    await Task.Run( () => TreeSitter.CreateTreeFromPath(moduleFilePath, moduleName), token);
+                                    current++;
+                                }
+                            }
                         }
 
-                        logger.LogInformation("Base Config: {Config}", baseConfig);
-
-                        var scopedConfig = new JObject();
-                        foreach (var config in configuration.AsEnumerable())
-                        {
-                            scopedConfig.Add(config.Key, config.Value);
-                        }
-
-                        logger.LogInformation("Scoped Config: {Config}", scopedConfig);
-
+                        manager.OnCompleted();
                     })
-                    */
+                    
             );
+
+            // lmao i have no idea
 
             await server.WaitForExit;
         }
@@ -171,7 +179,6 @@ namespace jai_lsp
 
         static void ConfigureServices(IServiceCollection services)
         {
-            services.AddSingleton<BufferManager>();
         }
     }
 
