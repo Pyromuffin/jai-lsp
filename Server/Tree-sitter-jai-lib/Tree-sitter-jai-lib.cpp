@@ -78,6 +78,11 @@ struct Scope
 	TSNode node; // these need to be updated when edited???
 };
 
+struct ModuleScope
+{
+	std::unordered_map<std::string_view, ScopeEntry> entries;
+};
+
 extern "C" TSLanguage* tree_sitter_jai();
 static TSLanguage* s_jaiLang;
 
@@ -90,7 +95,7 @@ static TSSymbol s_structDecl;
 static std::unordered_map<std::string_view, TSTree*> s_trees;
 static std::unordered_map<std::string_view, GapBuffer> s_buffers;
 static std::unordered_map<std::string_view, char*> s_names;
-static std::unordered_map<std::string_view, Scope> s_modules;
+static std::unordered_map<std::string_view, ModuleScope> s_modules;
 typedef std::unordered_map<const void*, Scope> ScopeMap;
 
 
@@ -130,13 +135,14 @@ static inline const char* ReadGapBuffer(void* payload, uint32_t byteOffset, TSPo
 	}
 }
 
-std::string_view GetIdentifier(const TSNode& node, const char* code)
+std::string_view GetIdentifier(const TSNode& node, std::string_view code)
 {
 	auto start = ts_node_start_byte(node);
 	auto end = ts_node_end_byte(node);
 	auto length = end - start;
 	return std::string_view(&code[start], length);
 }
+
 
 static std::unordered_map<buffer_view, TokenType> s_tokenTypes;
 
@@ -184,14 +190,14 @@ Scope* GetScopeForNode(const TSNode& node, ScopeMap& scopeMap)
 	return &scopeMap[parent.id];
 }
 
-void BuildModuleScope(const char* document, const char* moduleName)
+std::vector<std::string_view> BuildModuleScope(const char* document, const char* moduleName)
 {
 	auto tree = ts_tree_copy(s_trees[document]);
 	auto root = ts_tree_root_node(tree);
 	auto buffer = &s_buffers[document];
 
-	Scope& scope = s_modules[moduleName];
-	scope.node = root;
+	ModuleScope& scope = s_modules[moduleName];
+	std::vector<std::string_view> loads;
 
 	auto queryText =
 		"(source_file (variable_decl name : (identifier) @definition))"
@@ -202,6 +208,7 @@ void BuildModuleScope(const char* document, const char* moduleName)
 		//"(enum_definition name : (identifier) @definition)"
 		"(export_scope_directive) @export"
 		"(file_scope_directive) @file"
+		"(load_directive name : (string_literal) @load)"
 		;
 
 	uint32_t error_offset;
@@ -227,10 +234,11 @@ void BuildModuleScope(const char* document, const char* moduleName)
 		definition_parent,
 		exportDirective,
 		fileDirective,
+		loadDirective,
 	};
 
 	bool exporting = false;
-
+	auto code = buffer->GetEntireStringView();
 	while (ts_query_cursor_next_capture(queryCursor, &match, &index))
 	{
 		Capture captureType = (Capture)match.captures[index].index;
@@ -244,7 +252,7 @@ void BuildModuleScope(const char* document, const char* moduleName)
 			ScopeEntry entry;
 			entry.position = ts_node_start_point(node);
 			entry.type = GetTokenTypeForNode(node);
-			scope.entries[GetIdentifier(node, buffer)] = entry;
+			scope.entries[GetIdentifier(node, code)] = entry;
 			break;
 		case Capture::exportDirective:
 			exporting = true;
@@ -255,7 +263,15 @@ void BuildModuleScope(const char* document, const char* moduleName)
 		case Capture::definition_parent:
 			entry.position = ts_node_start_point(node);
 			entry.type = GetTokenTypeForNode(ts_node_parent(node));
-			scope.entries[GetIdentifier(node, buffer)] = entry;
+			scope.entries[GetIdentifier(node, code)] = entry;
+			break;
+		case Capture::loadDirective:
+			{
+				auto fileName = GetIdentifier(node, code);
+				// remove quotes from string literal
+				fileName = fileName.substr(1, fileName.size() - 2);
+				loads.push_back(fileName);
+			}
 			break;
 		default:
 			break;
@@ -265,6 +281,8 @@ void BuildModuleScope(const char* document, const char* moduleName)
 	ts_tree_delete(tree);
 	ts_query_delete(query);
 	ts_query_cursor_delete(queryCursor);
+
+	return loads;
 }
 
 /*
@@ -505,37 +523,52 @@ export long long CreateTree(const char* document, const char* code, int length)
 	auto timer = Timer("");
 
 	auto nameLength = strlen(document) + 1;
-	auto storage = (char*)malloc(nameLength);
-	strcpy_s(storage, nameLength,  document);
+	auto name = (char*)malloc(nameLength);
+	strcpy_s(name, nameLength,  document);
 
-	s_names[storage] = storage; // leak!
-	s_buffers[storage] = GapBuffer(code, length);
+	s_names[name] = name; // leak!
+	s_buffers[name] = GapBuffer(code, length);
 
-	TSInput input;
-	input.encoding = TSInputEncodingUTF8;
-	input.read = ReadGapBuffer;
-	input.payload = &s_buffers[storage];
-
-	if (s_trees.contains(storage))
+	if (s_trees.contains(name))
 	{
-		ts_tree_delete(s_trees[storage]);
+		ts_tree_delete(s_trees[name]);
 	}
 
 	TSParser* parser = ts_parser_new();
 	ts_parser_set_language(parser, s_jaiLang);
 
-	auto tree = ts_parser_parse(parser, nullptr, input);
+	auto view = s_buffers[name].GetEntireStringView();
+	auto tree = ts_parser_parse_string(parser, nullptr, view.data(), length);
 
-	s_trees[storage] = tree;
+	s_trees[name] = tree;
 	ts_parser_delete(parser);
 
 	return timer.GetMicroseconds();
 }
 
+static void HandleLoad(std::string_view loadName, const char* moduleDirectory, const char* moduleName)
+{
+	// chop off moduleDirectory "module.jai" and insert loadname
+	auto path = std::filesystem::path(moduleDirectory);
+	path.replace_filename(loadName);
+
+	std::ifstream t(path);
+	t.seekg(0, std::ios::end);
+	size_t size = t.tellg();
+	std::string buffer(size, ' ');
+	t.seekg(0);
+	t.read(&buffer[0], size);
+
+	auto pathString = path.string();
+
+	CreateTree(pathString.c_str(), buffer.c_str(), buffer.length());
+
+	BuildModuleScope(pathString.c_str(), moduleName);
+}
+
 
 export long long CreateTreeFromPath(const char* document, const char* moduleName)
 {
-	//assert(false);
 	// for modules
 	auto timer = Timer("");
 
@@ -550,10 +583,16 @@ export long long CreateTreeFromPath(const char* document, const char* moduleName
 	// take the tree and create a module scope
 
 	auto nameLength = strlen(moduleName) + 1;
-	auto storage = (char*)malloc(nameLength);
-	strcpy_s(storage, nameLength, moduleName);
+	auto name = (char*)malloc(nameLength); // leak
+	strcpy_s(name, nameLength, moduleName);
 
-	BuildModuleScope(document, storage);
+	auto loads = BuildModuleScope(document, name);
+
+	for (auto load : loads)
+	{
+		HandleLoad(load, document, name);
+
+	}
 
 	return timer.GetMicroseconds();
 }
@@ -659,7 +698,6 @@ static void AddVaraibleReferenceTokens(const char* code, int row, int col,  TSNo
 		token.modifier = (TokenModifier)0;
 
 		auto identifier = GetIdentifier(node, code);
-		auto bufView = GetIdentifier(node, gb);
 		auto search = declMap.find(identifier);
 		if (search != declMap.end())
 		{
@@ -670,9 +708,9 @@ static void AddVaraibleReferenceTokens(const char* code, int row, int col,  TSNo
 		{
 			for (auto& mod : s_modules)
 			{
-				if (mod.second.entries.contains(bufView))
+				if (mod.second.entries.contains(identifier))
 				{
-					token.type = mod.second.entries[bufView].type;
+					token.type = mod.second.entries[identifier].type;
 					tokens.push_back(token);
 					break;
 				}

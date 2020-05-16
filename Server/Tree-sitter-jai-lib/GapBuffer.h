@@ -2,7 +2,7 @@
 #include <vector>
 #include <iostream>
 #include <tree_sitter/api.h>
-
+#include <assert.h>
 
 
 class GapBuffer
@@ -74,18 +74,23 @@ private:
         }
     }
 
-  
+
 
 public:
 
     GapBuffer() {}
 
-    GapBuffer(const char* initialContent, int length)
+    bool IsRewound()
     {
-        for (int i = 0; i < length; i++)
+        return after.size() == 0;
+    }
+
+    void Rewind()
+    {
+        for (int i = 0; i < after.size(); i++)
         {
-            int index = length - i - 1;
-            after.push_back(initialContent[index]);
+            before.push_back(after.back());
+            after.pop_back();
         }
     }
 
@@ -138,6 +143,28 @@ public:
                 currentCol++;
             }
         }
+    }
+
+    GapBuffer(const char* initialContent, int length)
+    {
+        InsertAtCursor(initialContent, length);
+    }
+
+    // this is slightly dangerous, because you can hold on to a string view for longer than it might be valid.
+    // mostly just use this for module parsing and initial tree creation.
+
+    std::string_view GetStringView(int start, int length)
+    {
+        assert(IsRewound());
+        auto view = std::string_view(&before[start], length);
+        return view;
+    }
+
+    std::string_view GetEntireStringView()
+    {
+        assert(IsRewound());
+        auto view = std::string_view(&before[0], before.size());
+        return view;
     }
 
     /*
