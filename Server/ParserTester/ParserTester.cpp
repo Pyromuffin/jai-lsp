@@ -53,7 +53,7 @@ extern "C"
 
 }
 
-const char* path = "C:\\Users\\pyrom\\Desktop\\jai\\modules\\Basic\\Print.jai";
+const char* path = "C:\\Users\\pyrom\\Desktop\\jai\\how_to\\010_calling_procedures.jai";
 
 char buffer[100000];
 
@@ -179,6 +179,12 @@ int main()
 	
 	std::cout << CreateTree("tomato", buffer, i) << "\n";
 	std::cout << UpdateTree("tomato", "=", 100, 0, 1, 1) << "\n";
+	std::cout << UpdateTree("tomato", "=", 100, 0, 1, 1) << "\n";
+	std::cout << UpdateTree("tomato", "=", 300, 0, 1, 1) << "\n";
+	std::cout << UpdateTree("tomato", "=", 200, 0, 1, 1) << "\n";
+	std::cout << UpdateTree("tomato", "=", 100, 0, 1, 1) << "\n";
+
+	/*
 	SemanticToken* tokens;
 	int count;
 	GetTokens("tomato", &tokens, &count);
@@ -190,7 +196,7 @@ int main()
 
 
 	GapBufferHashingTest();
-
+	*/
 }
 
 // Run program: Ctrl + F5 or Debug > Start Without Debugging menu

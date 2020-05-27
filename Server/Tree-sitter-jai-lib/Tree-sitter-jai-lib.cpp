@@ -103,8 +103,8 @@ export int Init()
 {
 	s_jaiLang = tree_sitter_jai();
 	s_constDecl = ts_language_symbol_for_name(s_jaiLang, "constant_definition", strlen("constant_definition"), true);
-	s_varDecl = ts_language_symbol_for_name(s_jaiLang, "variable_decl", strlen("variable_decl"), true);
-	s_funcDecl = ts_language_symbol_for_name(s_jaiLang, "function_definition", strlen("function_definition"), true);
+	s_varDecl = ts_language_symbol_for_name(s_jaiLang, "named_decl", strlen("named_decl"), true);
+	s_funcDecl = ts_language_symbol_for_name(s_jaiLang, "named_block_decl", strlen("named_block_decl"), true);
 	s_structDecl = ts_language_symbol_for_name(s_jaiLang, "struct_definition", strlen("struct_definition"), true);
 	//nameId = ts_language_field_id_for_name(jaiLang, "name", strlen("name"));
 	return 69420;
@@ -200,12 +200,17 @@ std::vector<std::string_view> BuildModuleScope(const char* document, const char*
 	std::vector<std::string_view> loads;
 
 	auto queryText =
-		"(source_file (variable_decl name : (identifier) @definition))"
-		"(source_file (compound_variable_decl name : (identifier) @definition))"
-		"(source_file (constant_definition name : (identifier) @definition_parent))"
-		"(source_file (struct_definition name : (identifier) @definition_parent))"
-		"(source_file (function_definition name : (identifier) @definition_parent))"
-		//"(enum_definition name : (identifier) @definition)"
+		//"(source_file (named_decl name: (identifier) @definition))"
+		//"(source_file (named_block_decl name: (identifier) @func_defn (function_definition)))"
+		//"(source_file (named_block_decl name: (identifier) @struct_defn (struct_definition)))"
+		
+		"(source_file (named_decl (names (identifier) @definition)))"
+		//"(source_file (named_decl (names (identifier) @definition) \":\" \":\"))"
+		"(source_file (named_block_decl (names (identifier) @func_defn) (function_definition)))"
+		"(source_file (named_block_decl (names (identifier) @struct_defn) (struct_definition)))"
+		//"(source_file (named_block_decl (names (identifier) @enum_defn) (enum_definition)))"
+		
+		
 		"(export_scope_directive) @export"
 		"(file_scope_directive) @file"
 		"(load_directive name : (string_literal) @load)"
@@ -231,13 +236,14 @@ std::vector<std::string_view> BuildModuleScope(const char* document, const char*
 	enum class Capture
 	{
 		definition,
-		definition_parent,
+		func_defn,
+		struct_defn,
 		exportDirective,
 		fileDirective,
 		loadDirective,
 	};
 
-	bool exporting = false;
+	bool exporting = true;
 	auto code = buffer->GetEntireStringView();
 	while (ts_query_cursor_next_capture(queryCursor, &match, &index))
 	{
@@ -247,6 +253,7 @@ std::vector<std::string_view> BuildModuleScope(const char* document, const char*
 		switch (captureType)
 		{
 		case Capture::definition:
+		{
 			if (!exporting)
 				continue;
 			ScopeEntry entry;
@@ -254,17 +261,33 @@ std::vector<std::string_view> BuildModuleScope(const char* document, const char*
 			entry.type = GetTokenTypeForNode(node);
 			scope.entries[GetIdentifier(node, code)] = entry;
 			break;
+		}
 		case Capture::exportDirective:
 			exporting = true;
 			break;
 		case Capture::fileDirective:
 			exporting = false;
 			break;
-		case Capture::definition_parent:
+
+		case Capture::func_defn:
+		{
+			if (!exporting)
+				continue;
+			ScopeEntry entry;
 			entry.position = ts_node_start_point(node);
-			entry.type = GetTokenTypeForNode(ts_node_parent(node));
+			entry.type = TokenType::Function;
 			scope.entries[GetIdentifier(node, code)] = entry;
 			break;
+		}
+		case Capture::struct_defn:
+		{
+			if (!exporting)
+				continue;
+			ScopeEntry entry;
+			entry.position = ts_node_start_point(node);
+			entry.type = TokenType::Type;
+			scope.entries[GetIdentifier(node, code)] = entry;
+		}
 		case Capture::loadDirective:
 			{
 				auto fileName = GetIdentifier(node, code);
@@ -747,22 +770,20 @@ export long long GetTokens(const char* document, SemanticToken** outTokens, int*
 	enum class DeclType
 	{
 		variable,
-		function,
 		constant,
+		function,
 		structure,
-		type,
 		enumeration,
+		type,
 	};
 
-	auto queryText = "(variable_decl name: (identifier) @var_decl)"
-		"(compound_variable_decl name: (identifier) @var_decl)"
-		"(named_parameter_decl name : (identifier) @var_decl)"
-		"(using_statement name: (identifier) @var_decl)"
-		"(function_definition name: (identifier) @func_decl)"
-		"(constant_definition name: (identifier) @const_decl)"
-		"(struct_definition name: (identifier) @struct_decl)"
-		"(type_definition name: (identifier) @type_definition)"
-		"(enum_member name: (identifier) @enum_member)"
+	auto queryText = 
+		"(named_decl (names (identifier) @var_decl))"
+		"(named_decl (names (identifier) @const_decl) \":\" \":\")"
+		"(named_block_decl (names (identifier) @func_defn) (function_definition))"
+		"(named_block_decl (names (identifier) @struct_defn) (struct_definition))"
+		"(named_block_decl (names (identifier) @enum_defn) (enum_definition))"
+		"(parameter name: (identifier) @var_decl)"
 		;
 
 	auto var_decl_query = ts_query_new(
@@ -786,17 +807,6 @@ export long long GetTokens(const char* document, SemanticToken** outTokens, int*
 	{
 		auto& node = match.captures[index].node;
 		auto captureIndex = match.captures[index].index;
-		/*
-		auto start = ts_node_start_point(node);
-		auto end = ts_node_end_point(node);
-
-		SemanticToken token;
-		token.col = start.column;
-		token.line = start.row;
-		token.length = end.column - start.column;
-		token.modifier = (TokenModifier)0;
-		*/
-
 		auto type = (DeclType)captureIndex;
 
 		switch (type)
@@ -808,16 +818,16 @@ export long long GetTokens(const char* document, SemanticToken** outTokens, int*
 			declMap[GetIdentifier(node, code)] = TokenType::Function;
 			break;
 		case DeclType::constant:
-			declMap[GetIdentifier(node, code)] = TokenType::EnumMember; // enum member for green.
+			declMap[GetIdentifier(node, code)] = TokenType::Number; // number for green.
 			break;
 		case DeclType::structure:
-			declMap[GetIdentifier(node, code)] = TokenType::Type; // type gets us the nice teal.
+			declMap[GetIdentifier(node, code)] = TokenType::Type; // type gets us the teal.
 			break;
-		case DeclType::type:
+		case DeclType::type: 
 			declMap[GetIdentifier(node, code)] = TokenType::Type;
 			break;
 		case DeclType::enumeration:
-			declMap[GetIdentifier(node, code)] = TokenType::EnumMember;
+			declMap[GetIdentifier(node, code)] = TokenType::Enum;
 			break;
 		default:
 			break;
