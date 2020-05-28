@@ -45,19 +45,18 @@ namespace jai_lsp
         extern static public long CreateTreeFromPath([MarshalAs(UnmanagedType.LPStr)] string document, [MarshalAs(UnmanagedType.LPStr)] string moduleName);
 
         [DllImport(dllpath)]
-        extern static public long CreateTree([MarshalAs(UnmanagedType.LPStr)] string document, [MarshalAs(UnmanagedType.LPStr)] string code, int length);
+        extern static public long CreateTree(ulong documentHash, [MarshalAs(UnmanagedType.LPStr)] string code, int length);
 
         [DllImport(dllpath)]
-        extern static public long UpdateTree([MarshalAs(UnmanagedType.LPStr)] string document);
+        extern static public long UpdateTree(ulong documentHash);
 
         [DllImport(dllpath)]
-        extern static public long EditTree([MarshalAs(UnmanagedType.LPStr)] string document, [MarshalAs(UnmanagedType.LPStr)] string change, int startLine, int startCol, int endLine, int endCol, int contentLength, int rangeLength);
+        extern static public long EditTree(ulong documentHash, [MarshalAs(UnmanagedType.LPStr)] string change, int startLine, int startCol, int endLine, int endCol, int contentLength, int rangeLength);
 
         [DllImport(dllpath)]
-        extern static public long GetTokens([MarshalAs(UnmanagedType.LPStr)] string document, out IntPtr tokens, out int count);
+        extern static public long GetTokens(ulong documentHash, out IntPtr tokens, out int count);
 
         [DllImport(dllpath)]
-        unsafe extern static public long GetTokensW([MarshalAs(UnmanagedType.LPWStr)] string codew, int length, out SemanticToken* tokens, out int count);
-
+        extern static public void FindDefinition(ulong documentName, int row, int col, out ulong outFileHash, out int outRow, out int outCol);
     }
 }

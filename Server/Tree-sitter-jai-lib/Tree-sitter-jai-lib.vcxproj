@@ -168,11 +168,14 @@
     </Lib>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="DefinitionFinder.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="GapBuffer.h" />
     <ClInclude Include="Timer.h" />
+    <ClInclude Include="TreeSitterJai.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="DefinitionFinder.cpp" />
     <ClCompile Include="GapBuffer.cpp" />
     <ClCompile Include="lib.c" />
     <ClCompile Include="Timer.cpp" />

@@ -24,6 +24,12 @@
     <ClInclude Include="GapBuffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="DefinitionFinder.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TreeSitterJai.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Tree-sitter-jai-lib.cpp">
@@ -36,6 +42,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="GapBuffer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="DefinitionFinder.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

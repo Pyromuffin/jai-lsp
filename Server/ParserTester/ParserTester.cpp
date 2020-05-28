@@ -104,6 +104,7 @@ static void SemanticTokensTest()
 }
 static void GapBufferHashingTest()
 {
+	/*
 	const char* codeA =
 		"main :: () {\n"
 		"foo :: int;\n"
@@ -137,7 +138,7 @@ static void GapBufferHashingTest()
 	std::cout << map[bv1] << "\n";
 	std::cout << map[bv2] << "\n";
 
-
+	*/
 }
 
 
@@ -177,12 +178,14 @@ int main()
 
 	buffer[i] = '\0';
 	
+	/*
 	std::cout << CreateTree("tomato", buffer, i) << "\n";
 	std::cout << UpdateTree("tomato", "=", 100, 0, 1, 1) << "\n";
 	std::cout << UpdateTree("tomato", "=", 100, 0, 1, 1) << "\n";
 	std::cout << UpdateTree("tomato", "=", 300, 0, 1, 1) << "\n";
 	std::cout << UpdateTree("tomato", "=", 200, 0, 1, 1) << "\n";
 	std::cout << UpdateTree("tomato", "=", 100, 0, 1, 1) << "\n";
+	*/
 
 	/*
 	SemanticToken* tokens;

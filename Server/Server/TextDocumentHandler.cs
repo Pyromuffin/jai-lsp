@@ -1,13 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
+using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
-using jai_lsp;
 using MediatR;
 using Microsoft.Extensions.Logging;
-using OmniSharp.Extensions.JsonRpc.Client;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
@@ -17,8 +13,17 @@ using OmniSharp.Extensions.LanguageServer.Server;
 
 namespace jai_lsp
 {
+    class HashNamer
+    {
+        public ConcurrentDictionary<ulong, string> hashToName = new ConcurrentDictionary<ulong, string>();
+
+    }
+
+
     class TextDocumentHandler : ITextDocumentSyncHandler
     {
+
+        HashNamer hashNamer;
         private readonly ILogger<TextDocumentHandler> _logger;
         private readonly ILanguageServerConfiguration _configuration;
 
@@ -32,33 +37,41 @@ namespace jai_lsp
         private SynchronizationCapability _capability;
 
         public TextDocumentHandler(ILogger<TextDocumentHandler> logger, Logjam foo,
-            ILanguageServerConfiguration configuration)
+            ILanguageServerConfiguration configuration,
+            HashNamer hashNamer
+            )
         {
             _logger = logger;
             _configuration = configuration;
+            this.hashNamer = hashNamer;
         }
 
         public TextDocumentSyncKind Change { get; } = TextDocumentSyncKind.Incremental;
 
         public async Task<Unit> Handle(DidOpenTextDocumentParams notification, CancellationToken token)
         {
-            await Task.Run(() => TreeSitter.CreateTree(notification.TextDocument.Uri.GetFileSystemPath(), notification.TextDocument.Text, notification.TextDocument.Text.Length));
+            var path = notification.TextDocument.Uri.GetFileSystemPath();
+            var hash = Hash.StringHash(path);
+            hashNamer.hashToName[hash] = path;
+
+            await Task.Run(() => TreeSitter.CreateTree(hash, notification.TextDocument.Text, notification.TextDocument.Text.Length));
             return Unit.Value;
         }
 
         public async Task<Unit> Handle(DidChangeTextDocumentParams request, CancellationToken token)
         {
             var documentPath = request.TextDocument.Uri.GetFileSystemPath();
-            foreach(var change in request.ContentChanges)
+            var hash = Hash.StringHash(documentPath);
+            foreach (var change in request.ContentChanges)
             {
                 var range = change.Range;
                 var start = range.Start;
                 var end = range.End;
 
-                await Task.Run(() => TreeSitter.EditTree(documentPath, change.Text, start.Line, start.Character, end.Line, end.Character, change.Text.Length, change.RangeLength));
+                await Task.Run(() => TreeSitter.EditTree(hash, change.Text, start.Line, start.Character, end.Line, end.Character, change.Text.Length, change.RangeLength));
             }
 
-            await Task.Run(() => TreeSitter.UpdateTree(documentPath));
+            await Task.Run(() => TreeSitter.UpdateTree(hash));
             return Unit.Value;
         }
 

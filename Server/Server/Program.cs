@@ -45,11 +45,10 @@ namespace jai_lsp
 
         static async Task MainAsync(string[] args)
         {
-            // Debugger.Launch();
-            // while (!System.Diagnostics.Debugger.IsAttached)
-            // {
-            //     await Task.Delay(100);
-            // }
+             while (!System.Diagnostics.Debugger.IsAttached)
+             {
+                 await Task.Delay(100);
+             }
 
             TreeSitter.Init();
 
@@ -78,17 +77,21 @@ namespace jai_lsp
                     //.WithHandler<MyDocumentSymbolHandler>()
                     .WithHandler<WorkspaceFolderChangeHandler>()
                     .WithHandler<SemanticHighlight>()
+                    .WithHandler<GoToDefinitionHandler>()
                     .WithServices(ConfigureServices)
                     .WithServices(x => x.AddLogging(b => b.SetMinimumLevel(LogLevel.Trace)))
                     .WithServices(services => {
-                        services.AddSingleton(provider => {
+                        services.AddSingleton(provider =>
+                        {
                             var loggerFactory = provider.GetService<ILoggerFactory>();
                             var logger = loggerFactory.CreateLogger<Logjam>();
 
                             logger.LogInformation("Configuring");
 
                             return new Logjam(logger);
-                        });
+                        })
+                        .AddSingleton<HashNamer>();
+                        
                     })
                     /*
                     .OnInitialize(async (server, request, token) => {
@@ -138,7 +141,6 @@ namespace jai_lsp
                         manager.OnNext(new WorkDoneProgressReport() { Message = "doing things... 56789" });
 
                         */
-
                         using var manager = languageServer.ProgressManager.Create(new WorkDoneProgressBegin() { Title = "Parsing Modules", Percentage = 0, Cancellable = true });
                         var logger = languageServer.Services.GetService<ILogger<Logjam>>();
                         

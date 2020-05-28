@@ -121,10 +121,12 @@ namespace jai_lsp
 
         async protected override Task Tokenize(SemanticTokensBuilder builder, ITextDocumentIdentifierParams identifier, CancellationToken cancellationToken)
         {
+            var hash = Hash.StringHash(identifier.TextDocument.Uri.GetFileSystemPath());
+
             var now = DateTime.Now;
             IntPtr tokensPtr = IntPtr.Zero;
             int count = 0;
-            long internalMicros = await Task.Run( () => TreeSitter.GetTokens(identifier.TextDocument.Uri.GetFileSystemPath(), out tokensPtr, out count), cancellationToken);
+            long internalMicros = await Task.Run( () => TreeSitter.GetTokens(hash, out tokensPtr, out count), cancellationToken);
             var then = DateTime.Now;
             var elapsed = then - now;
             _logger.LogInformation("Elapsed time for C++ tokens: " + elapsed.TotalMilliseconds + " native time: " + internalMicros);
