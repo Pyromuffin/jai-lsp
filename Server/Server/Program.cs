@@ -73,6 +73,8 @@ namespace jai_lsp
                         .AddSerilog()
                         .AddLanguageServer()
                         .SetMinimumLevel(LogLevel.Debug))
+                    .WithHandler<Definer>()
+                    .WithHandler<Hoverer>()
                     .WithHandler<TextDocumentHandler>()
                     .WithHandler<CompletionHandler>()
                     //.WithHandler<FoldingRangeHandler>()
@@ -80,7 +82,6 @@ namespace jai_lsp
                     //.WithHandler<MyDocumentSymbolHandler>()
                     .WithHandler<WorkspaceFolderChangeHandler>()
                     .WithHandler<SemanticHighlight>()
-                    .WithHandler<GoToDefinitionHandler>()
                     .WithServices(ConfigureServices)
                     .WithServices(x => x.AddLogging(b => b.SetMinimumLevel(LogLevel.Error)))
                     .WithServices(services => {
@@ -146,12 +147,20 @@ namespace jai_lsp
                         */
                         using var manager = languageServer.ProgressManager.Create(new WorkDoneProgressBegin() { Title = "Parsing Modules", Percentage = 0, Cancellable = true });
                         var logger = languageServer.Services.GetService<ILogger<Logjam>>();
-                        
+                        var namer = languageServer.Services.GetService<HashNamer>();
+
                         WorkspaceFolderParams wsf = new WorkspaceFolderParams();
                         var wsfresults = await languageServer.Client.SendRequest(wsf, token);
             
                         foreach(var folder in wsfresults)
                         {
+                            // find all the jai files and hash their paths
+                            string[] files = Directory.GetFiles(folder.Uri.GetFileSystemPath(), "*.jai", SearchOption.AllDirectories);
+                            foreach(var f in files)
+                            {
+                                namer.hashToName[Hash.StringHash(f)] = f;
+                            }    
+
                             var path = Path.Combine(folder.Uri.GetFileSystemPath(), "modules");
                             var moduleDirectories = Directory.EnumerateDirectories(path);
                             var count = moduleDirectories.Count();

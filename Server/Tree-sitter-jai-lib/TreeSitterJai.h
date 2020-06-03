@@ -54,7 +54,7 @@ struct SemanticToken
 
 struct ScopeEntry
 {
-	TSPoint definitionPosition;
+	TSNode definitionNode;
 	TokenType type;
 #if _DEBUG
 	std::string name;
@@ -72,6 +72,28 @@ struct Scope
 	
 };
 
+struct ModuleScopeEntry
+{
+	TSNode definitionNode;
+	Hash definingFile;
+	TokenType type;
+
+#if _DEBUG
+	std::string name;
+#endif
+};
+
+struct ModuleScope
+{
+	std::unordered_map<Hash, ModuleScopeEntry> entries;
+	//TSNode node; // this is used for finding the parent scope of a scope so that we can inject things into the outer scope
+
+#if _DEBUG
+	buffer_view content;
+#endif
+
+};
+
 struct FileScope
 {
 	std::vector<Hash> imports;
@@ -82,7 +104,7 @@ struct FileScope
 
 extern std::unordered_map<Hash, TSTree*> g_trees;
 extern std::unordered_map<Hash, GapBuffer> g_buffers;
-extern std::unordered_map<Hash, Scope> g_modules;
+extern std::unordered_map<Hash, ModuleScope> g_modules;
 extern std::unordered_map<Hash, FileScope> g_fileScopes;
 
 std::string_view GetIdentifier(const TSNode& node, std::string_view code);

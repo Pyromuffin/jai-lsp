@@ -1,6 +1,31 @@
 #include "TreeSitterJai.h"
 
-export void FindDefinition(Hash documentName, int row, int col, Hash* outFileHash, int* outRow, int* outCol)
+struct Range
+{
+	int startRow, startCol;
+	int endRow, endCol;
+};
+
+static Range PointsToRange(TSPoint start, TSPoint end)
+{
+	Range range;
+	range.startCol = start.column;
+	range.startRow = start.row;
+	range.endCol = end.column;
+	range.endRow = end.row;
+
+	return range;
+}
+
+static Range NodeToRange(TSNode node)
+{
+	auto start = ts_node_start_point(node);
+	auto end = ts_node_end_point(node);
+	return PointsToRange(start, end);
+}
+
+
+export void FindDefinition(Hash documentName, int row, int col, Hash* outFileHash, Range* outOriginRange, Range* outTargetRange, Range* outSelectionRange)
 {
 	auto tree = ts_tree_copy(g_trees[documentName]);
 	auto root = ts_tree_root_node(tree);
@@ -13,17 +38,32 @@ export void FindDefinition(Hash documentName, int row, int col, Hash* outFileHas
 	auto identifierHash = GetIdentifierHash(identifierNode, buffer);
 	auto scope = GetScopeForNode(identifierNode, fileScope);
 
-	if (scope != nullptr)
+	Range target, selection;
+	*outOriginRange = NodeToRange(identifierNode);
+
+	if (scope != nullptr && scope->entries.contains(identifierHash))
 	{
 		auto entry = scope->entries[identifierHash];
 		*outFileHash = documentName;
-		*outRow = entry.definitionPosition.row;
-		*outCol = entry.definitionPosition.column;
+		*outTargetRange = NodeToRange(entry.definitionNode);
+		*outSelectionRange = NodeToRange(entry.definitionNode);
 		ts_tree_delete(tree);
 		return;
 	}
 	else
 	{
+		// search file scope
+		if (fileScope->file.entries.contains(identifierHash))
+		{
+			auto entry = fileScope->file.entries[identifierHash];
+			*outFileHash = documentName;
+			*outTargetRange = NodeToRange(entry.definitionNode);
+			*outSelectionRange = NodeToRange(entry.definitionNode);
+			ts_tree_delete(tree);
+			return;
+		}
+
+
 		// search modules
 		for (int i = 0; i < fileScope->imports.size(); i++)
 		{
@@ -32,9 +72,9 @@ export void FindDefinition(Hash documentName, int row, int col, Hash* outFileHas
 			if (moduleScope->entries.contains(identifierHash))
 			{
 				auto entry = moduleScope->entries[identifierHash];
-				*outFileHash = importHash;
-				*outRow = entry.definitionPosition.row;
-				*outCol = entry.definitionPosition.column;
+				*outFileHash = entry.definingFile;
+				*outTargetRange = NodeToRange(entry.definitionNode);
+				*outSelectionRange = NodeToRange(entry.definitionNode);
 				ts_tree_delete(tree);
 				return;
 			}

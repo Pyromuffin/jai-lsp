@@ -14,6 +14,15 @@ namespace jai_lsp
     };
 
     [StructLayout(LayoutKind.Sequential)]
+    struct Range
+    {
+        public int startLine;
+        public int startCol;
+        public int endLine;
+        public int endCol;
+    };
+
+    [StructLayout(LayoutKind.Sequential)]
     unsafe struct Gap
     {
         byte* before;
@@ -63,7 +72,7 @@ namespace jai_lsp
         extern static public long GetTokens(ulong documentHash, out IntPtr tokens, out int count);
 
         [DllImport(dllpath)]
-        extern static public void FindDefinition(ulong documentName, int row, int col, out ulong outFileHash, out int outRow, out int outCol);
+        extern static public void FindDefinition(ulong documentName, int row, int col, out ulong outFileHash, out Range origin, out Range target, out Range selection);
         
         [DllImport(dllpath)]
         extern static public IntPtr GetSyntaxNice(ulong documentHash);

@@ -1,6 +1,7 @@
 ﻿using MediatR;
 using Microsoft.Extensions.Logging;
 using OmniSharp.Extensions.LanguageServer.Protocol;
+using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using System;
@@ -9,63 +10,104 @@ using System.Threading.Tasks;
 
 namespace jai_lsp
 {
-    class GoToDefinitionHandler : DefinitionHandler
+    class Definer: IDefinitionHandler
     {
-
-        HashNamer namer;
+        HashNamer hashNamer;
         ILogger _logger;
 
-        public GoToDefinitionHandler(ProgressManager progressManager, HashNamer namer, ILogger<GoToDefinitionHandler> logger) : base(new DefinitionRegistrationOptions()
-        {
-            DocumentSelector = DocumentSelector.ForLanguage("jai"),
-            WorkDoneProgress = false
-        }
-            , progressManager)
-        {
-            
-            this.namer = namer;
-            _logger = logger;
-        }
-
-
-        /*
-        public GoToDefinitionHandler(ILogger<SemanticTokens> logger) : base(new SemanticTokensRegistrationOptions()
-        {
-            DocumentSelector = DocumentSelector.ForLanguage("jai"),
-            Legend = new SemanticTokensLegend()
+        private readonly DocumentSelector _documentSelector = new DocumentSelector(
+            new DocumentFilter()
             {
-                TokenTypes = typeNames,
-                TokenModifiers = modifierNames,
-            },
-            DocumentProvider = new Supports<SemanticTokensDocumentProviderOptions>(true,
-                  new SemanticTokensDocumentProviderOptions()
-                  {
-                      Edits = false
-                  }),
-            RangeProvider = false
-        })
+                Pattern = "**/*.jai"
+            }
+        );
+
+
+        public Definer(ILogger<TextDocumentHandler> logger, HashNamer hashNamer)
         {
             _logger = logger;
+            this.hashNamer = hashNamer;
         }
-        */
 
-        public override Task<LocationOrLocationLinks> Handle(DefinitionParams request, CancellationToken cancellationToken)
+        public DefinitionRegistrationOptions GetRegistrationOptions()
+        {
+            var options = new DefinitionRegistrationOptions();
+            options.DocumentSelector = _documentSelector;
+            options.WorkDoneProgress = false;
+            return options;
+        }
+
+        OmniSharp.Extensions.LanguageServer.Protocol.Models.Range ConvertRange(Range range)
+        {
+            var r = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range();
+            r.Start = new Position();
+            r.End = new Position();
+
+            r.Start.Character = range.startCol;
+            r.Start.Line = range.startLine;
+            r.End.Character = range.endCol;
+            r.End.Line = range.endLine;
+
+            return r;
+        }
+
+        public Task<LocationOrLocationLinks> Handle(DefinitionParams request, CancellationToken cancellationToken)
         {
             var hash = Hash.StringHash(request.TextDocument.Uri.GetFileSystemPath());
-            TreeSitter.FindDefinition(hash, request.Position.Line, request.Position.Character, out var defHash, out var row, out var col);
-            
-            if(defHash != 0)
+            TreeSitter.FindDefinition(hash, request.Position.Line, request.Position.Character, out var defHash, out var origin, out var target, out var selection);
+
+            if (defHash != 0)
             {
-                var position = new Position(row, col);
-                var range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(position, position);
                 LocationLink link = new LocationLink();
-                link.TargetUri = "file://" + namer.hashToName[defHash];
-                link.TargetRange = range;
+                link.TargetUri = DocumentUri.FromFileSystemPath(hashNamer.hashToName[defHash]);
+                link.OriginSelectionRange = ConvertRange(origin);
+                link.TargetRange = ConvertRange(target);
+                link.TargetSelectionRange = ConvertRange(selection);
                 LocationOrLocationLinks ll = new LocationOrLocationLinks(link);
                 return Task.FromResult(ll);
             }
 
             return Task.FromResult(new LocationOrLocationLinks());
         }
+
+        public void SetCapability(DefinitionCapability capability)
+        {
+        }
     }
+
+
+    class Hoverer : IHoverHandler
+    {
+
+        private readonly DocumentSelector _documentSelector = new DocumentSelector(
+            new DocumentFilter()
+            {
+                Pattern = "**/*.jai"
+            }
+        );
+
+        public HoverRegistrationOptions GetRegistrationOptions()
+        {
+            var options = new HoverRegistrationOptions();
+            options.DocumentSelector = _documentSelector;
+            options.WorkDoneProgress = false;
+            return options;
+        }
+
+        public Task<Hover> Handle(HoverParams request, CancellationToken cancellationToken)
+        {
+            var hover = new Hover();
+            hover.Contents = new MarkedStringsOrMarkupContent("Lomato!");
+            return Task.FromResult(hover);
+        }
+
+        public void SetCapability(HoverCapability capability)
+        {
+            
+        }
+    }
+
+
 }
+
+

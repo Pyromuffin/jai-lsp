@@ -16,7 +16,7 @@
 std::unordered_map<Hash, bool> g_dirty;
 std::unordered_map<Hash, TSTree*> g_trees;
 std::unordered_map<Hash, GapBuffer> g_buffers;
-std::unordered_map<Hash, Scope> g_modules;
+std::unordered_map<Hash, ModuleScope> g_modules;
 std::unordered_map<Hash, FileScope> g_fileScopes;
 
 
@@ -176,7 +176,7 @@ static std::vector<std::string_view> BuildModuleScope(Hash document, const char*
 	auto root = ts_tree_root_node(tree);
 	auto buffer = &g_buffers[document];
 
-	Scope& scope = g_modules[StringHash(moduleName)];
+	ModuleScope& scope = g_modules[StringHash(moduleName)];
 	std::vector<std::string_view> loads;
 
 	auto queryText =
@@ -236,9 +236,10 @@ static std::vector<std::string_view> BuildModuleScope(Hash document, const char*
 		{
 			if (!exporting)
 				continue;
-			ScopeEntry entry;
-			entry.definitionPosition = ts_node_start_point(node);
+			ModuleScopeEntry entry;
+			entry.definitionNode = node;
 			entry.type = GetTokenTypeForNode(node);
+			entry.definingFile = document;
 #if _DEBUG
 			entry.name = GetIdentifierFromBufferCopy(node, buffer);
 #endif
@@ -256,9 +257,11 @@ static std::vector<std::string_view> BuildModuleScope(Hash document, const char*
 		{
 			if (!exporting)
 				continue;
-			ScopeEntry entry;
-			entry.definitionPosition = ts_node_start_point(node);
+			ModuleScopeEntry entry;
+			entry.definitionNode = node;
 			entry.type = TokenType::Function;
+			entry.definingFile = document;
+
 #if _DEBUG
 			entry.name = GetIdentifierFromBufferCopy(node, buffer);
 #endif
@@ -269,9 +272,11 @@ static std::vector<std::string_view> BuildModuleScope(Hash document, const char*
 		{
 			if (!exporting)
 				continue;
-			ScopeEntry entry;
-			entry.definitionPosition = ts_node_start_point(node);
+			ModuleScopeEntry entry;
+			entry.definitionNode = node;
 			entry.type = TokenType::Type;
+			entry.definingFile = document;
+
 #if _DEBUG
 			entry.name = GetIdentifierFromBufferCopy(node, buffer);
 #endif
@@ -315,7 +320,7 @@ static int CountParents(TSNode node)
 static ScopeEntry AddEntryToScope(TSNode node, TokenType type, GapBuffer* buffer, Scope* scope)
 {
 	ScopeEntry entry;
-	entry.definitionPosition = ts_node_start_point(node);
+	entry.definitionNode = node;
 	entry.type = type;
 #if _DEBUG
 	entry.name = GetIdentifierFromBufferCopy(node, buffer);
