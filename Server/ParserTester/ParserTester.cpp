@@ -9,26 +9,27 @@
 enum class TokenType
 {
 	Documentation,
-	Label,
-	Parameter,
-	Variable,
-	Macro,
-	Property,
-	Function,
-	TypeParameter,
-	Enum,
-	Interface,
-	Member,
-	Struct,
-	Class,
+	Comment,
 	Keyword,
 	String,
 	Number,
-	Comment,
+	Regexp,
 	Operator,
 	Namespace,
 	Type,
-	Regexp,
+	Struct,
+	Class,
+	Interface,
+	Enum,
+	TypeParameter,
+	Function,
+	Member,
+	Property,
+	Macro,
+	Variable,
+	Parameter,
+	Label,
+	EnumMember,
 };
 
 struct SemanticToken
@@ -45,12 +46,12 @@ extern "C"
 {
     int Init();
 	const char* GetCompletionItems(const char* code, int row, int col);
-	long long GetTokens(const char* document, SemanticToken** outTokens, int* count);
-	const char* GetSyntax(const char* document);
-	long long CreateTree(const char* document, const char* code, int length);
-	long long UpdateTree(const char* document, const char* change, int line, int col, int contentLength, int replacementLength);
-	GapBuffer* GetGapBuffer(const char* document);
-
+	long long GetTokens(Hash documentHash, SemanticToken** outTokens, int* count);
+	const char* GetSyntax(const Hash& documentHash);
+	long long CreateTree(Hash documentHash, const char* code, int length);
+	long long EditTree(Hash documentHash, const char* change, int startLine, int startCol, int endLine, int endCol, int contentLength, int rangeLength);
+	long long UpdateTree(Hash documentHash);
+	long long CreateTreeFromPath(const char* document, const char* moduleName);
 }
 
 const char* path = "C:\\Users\\pyrom\\Desktop\\jai\\how_to\\010_calling_procedures.jai";
@@ -71,10 +72,10 @@ static void EditReplaceTest()
 
 
 	//UpdateTree("tomato", originalCode, strlen(originalCode));
-	std::cout << GetSyntax("tomato") << "\n";
+	std::cout << GetSyntax(StringHash("tomato")) << "\n";
 
 //	UpdateTreeIncremental("tomato", changedCode, 1, 5, 18, -1);
-	std::cout << GetSyntax("tomato") << "\n";
+	std::cout << GetSyntax(StringHash("tomato")) << "\n";
 }
 
 static void SemanticTokensTest()
@@ -141,23 +142,16 @@ static void GapBufferHashingTest()
 	*/
 }
 
-
-static void GapBufferTest()
+void PrintTokens(Hash documentHash)
 {
-	const char* originalCode =
-		"main :: () {\n"
-		"foo :: int;\n"
-		"}\n";
+	SemanticToken* tokens;
+	int count;
 
-
-	CreateTree("tomato", originalCode, strlen(originalCode));
-	std::cout << GetSyntax("tomato") << "\n";
-
-	UpdateTree("tomato", "=", 1, 5, 1, 1);
-
-	GetGapBuffer("tomato")->PrintContents();
-
-	std::cout << GetSyntax("tomato") << "\n";
+	GetTokens(documentHash, &tokens, &count);
+	for (int i = 0; i < count; i++)
+	{
+		std::cout << (int)tokens[i].type << "\n";
+	}
 }
 
 
@@ -177,38 +171,86 @@ int main()
 	}
 
 	buffer[i] = '\0';
+
+
+	auto modulePath = "C:\\Users\\pyrom\\Desktop\\jai\\modules\\Basic\\module.jai";
+	Hash documentHash = StringHash("Tomato");
+
+	const char* test1 =
+		"main :: () {\n"
+		"print();\n"
+		"}\n\n"
+		"// tomato\n"
+		"#import \"Basic\";\n"
+		;
+
+	int tries = 5;
+	// CreateTreeFromPath(modulePath, "Basic");
+	CreateTree(documentHash, test1, strlen(test1));
+	std::cout << GetSyntax(documentHash) << "\n";
 	
+	//PrintTokens(documentHash);
+	EditTree(documentHash, "/", 5, 0, 5, 0, 1, 0);
+	UpdateTree(documentHash);
+	std::cout << GetSyntax(documentHash) << "\n";
+
+	//PrintTokens(documentHash);
+	EditTree(documentHash, "/", 5, 0, 5, 0, 1, 0);
+	UpdateTree(documentHash);
+	std::cout << GetSyntax(documentHash) << "\n";
+
+	//PrintTokens(documentHash);
+	EditTree(documentHash, "/", 5, 0, 5, 0, 1, 0);
+	UpdateTree(documentHash);
+	std::cout << GetSyntax(documentHash) << "\n";
+
+
+
+	EditTree(documentHash, "", 5, 0, 5, 0, 0, 1);
+	UpdateTree(documentHash);
+	std::cout << GetSyntax(documentHash) << "\n";
+
+
+	EditTree(documentHash, "", 5, 0, 5, 0, 0, 1);
+	UpdateTree(documentHash);
+	std::cout << GetSyntax(documentHash) << "\n";
+
+
+
+	EditTree(documentHash, "", 5, 0, 5, 0, 0, 1);
+	UpdateTree(documentHash);
+	std::cout << GetSyntax(documentHash) << "\n";
+
+
 	/*
-	std::cout << CreateTree("tomato", buffer, i) << "\n";
-	std::cout << UpdateTree("tomato", "=", 100, 0, 1, 1) << "\n";
-	std::cout << UpdateTree("tomato", "=", 100, 0, 1, 1) << "\n";
-	std::cout << UpdateTree("tomato", "=", 300, 0, 1, 1) << "\n";
-	std::cout << UpdateTree("tomato", "=", 200, 0, 1, 1) << "\n";
-	std::cout << UpdateTree("tomato", "=", 100, 0, 1, 1) << "\n";
+	//PrintTokens(documentHash);
+	EditTree(documentHash, "/", 5, 0, 5, 0, 1, 0);
+	UpdateTree(documentHash);
+	std::cout << GetSyntax(documentHash) << "\n";
+
+
+	EditTree(documentHash, " ", 5, 1, 5, 1, 1, 0);
+	UpdateTree(documentHash);
+	std::cout << GetSyntax(documentHash) << "\n";
+
+	EditTree(documentHash, "", 5, 1, 5, 1, 0, 1);
+	UpdateTree(documentHash);
+	std::cout << GetSyntax(documentHash) << "\n";
+
+	EditTree(documentHash, "", 5, 0, 5, 0, 0, 1);
+	UpdateTree(documentHash);
+	std::cout << GetSyntax(documentHash) << "\n";
 	*/
 
 	/*
-	SemanticToken* tokens;
-	int count;
-	GetTokens("tomato", &tokens, &count);
-
-	for (int i = 0; i < count; i++)
-	{
-		std::cout << (int)tokens[i].type << "\n";
-	}
+	PrintTokens(documentHash);
 
 
-	GapBufferHashingTest();
+	EditTree(documentHash, "", 5, 0, 2, 0, 0, 1);
+	UpdateTree(documentHash);
+	std::cout << GetSyntax(documentHash) << "\n";
+	PrintTokens(documentHash);
 	*/
 }
 
-// Run program: Ctrl + F5 or Debug > Start Without Debugging menu
-// Debug program: F5 or Debug > Start Debugging menu
 
-// Tips for Getting Started: 
-//   1. Use the Solution Explorer window to add/manage files
-//   2. Use the Team Explorer window to connect to source control
-//   3. Use the Output window to see build output and other messages
-//   4. Use the Error List window to view errors
-//   5. Go to Project > Add New Item to create new code files, or Project > Add Existing Item to add existing code files to the project
-//   6. In the future, to open this project again, go to File > Open > Project and select the .sln file

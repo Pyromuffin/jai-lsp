@@ -64,7 +64,7 @@ public:
     So for insertions, old_end == start, and for deletions, new_end == start.
     */
     TSInputEdit Edit(int line, int col, int endLine, int endCol, const char* content, int contentLength, int rangeLength);
-    int GetOffset();
+    uint32_t GetOffset();
     void PrintContents();
 
     // you gotta free this
@@ -81,7 +81,7 @@ struct buffer_view
     buffer_view() = default;
     buffer_view(int start, int end, GapBuffer* buffer);
 
-    std::unique_ptr<char[]> Copy();
+    std::string Copy();
 };
 
 
@@ -104,7 +104,7 @@ inline Hash StringHash(buffer_view string)
 
     for (uint32_t i = 0; i < string.length; i++)
     {
-        hash = hash ^ string.buffer->GetChar(i);
+        hash = hash ^ string.buffer->GetChar(string.start + i);
         hash = hash * 0x00000100000001B3ULL;
     }
 

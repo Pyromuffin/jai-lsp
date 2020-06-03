@@ -143,28 +143,94 @@ std::string_view GapBuffer::GetEntireStringView()
     return view;
 }
 
+
+TSPoint position_for_offset(char* input, int offset) {
+    auto result = TSPoint{ .row = 0, .column = 0 };
+    for (int i = 0; i <  offset; i++)
+        if (input[i] == '\n') {
+            result.row += 1;
+            result.column = 0;
+        }
+        else {
+            result.column += 1;
+        }
+        
+    return result;
+}
+
+TSInputEdit perform_edit(char* input, uint32_t editPosition, uint32_t deletedLength, uint32_t inserted_text_length ) {
+    auto start_byte = editPosition;
+    auto old_end_byte = editPosition + deletedLength;
+    auto new_end_byte = editPosition + inserted_text_length;
+    auto start_position = position_for_offset(input, start_byte);
+    auto old_end_position = position_for_offset(input, old_end_byte);
+    //input.splice(start_byte..old_end_byte, edit.inserted_text.iter().cloned());
+    
+    auto new_end_position = position_for_offset(input, new_end_byte);
+    auto edit = TSInputEdit{
+        start_byte,
+        old_end_byte,
+        new_end_byte,
+        start_position,
+        old_end_position,
+        new_end_position,
+    };
+
+    return edit;
+}
+
+
+
+
 TSInputEdit GapBuffer::Edit(int line, int col, int endLine, int endCol, const char* content, int contentLength, int rangeLength)
 {
+    auto text = Copy();
+
     Seek(line, col);
 
+    /*
     TSInputEdit edit;
     edit.start_byte = GetOffset();
     edit.start_point = { .row = static_cast<uint32_t>(line), .column = static_cast<uint32_t>(col) };
     edit.old_end_byte = edit.start_byte + rangeLength;
     edit.old_end_point = { .row = static_cast<uint32_t>(endLine), .column = static_cast<uint32_t>(endCol) };
+    */
+
+    auto start_byte = GetOffset();
+    auto old_end_byte = GetOffset() + rangeLength;
+    auto new_end_byte = GetOffset() + contentLength;
+    auto start_position = position_for_offset(text, start_byte);
+    auto old_end_position = position_for_offset(text, old_end_byte);
+    //input.splice(start_byte..old_end_byte, edit.inserted_text.iter().cloned());
 
     after.resize(after.size() - rangeLength);
-
     InsertAtCursor(content, contentLength);
-    edit.new_end_byte = edit.start_byte + contentLength;
-    edit.new_end_point = { .row = static_cast<uint32_t>(currentLine), .column = static_cast<uint32_t>(currentCol) };
+
+    auto edited = Copy();
+
+    auto new_end_position = position_for_offset(edited, new_end_byte);
+    auto edit = TSInputEdit{
+        start_byte,
+        old_end_byte,
+        new_end_byte,
+        start_position,
+        old_end_position,
+        new_end_position,
+    };
+
+
+    //edit.new_end_byte = edit.start_byte + contentLength;
+    //edit.new_end_point = { .row = static_cast<uint32_t>(currentLine), .column = static_cast<uint32_t>(currentCol) };
+
+    free(text);
+    free(edited);
 
     return edit;
 }
 
-int GapBuffer::GetOffset()
+uint32_t GapBuffer::GetOffset()
 {
-    return static_cast<int>(before.size());
+    return static_cast<uint32_t>(before.size());
 }
 
 void GapBuffer::PrintContents()
@@ -209,12 +275,13 @@ buffer_view::buffer_view(int start, int end, GapBuffer* buffer)
     this->buffer = buffer;
 }
 
-std::unique_ptr<char[]> buffer_view::Copy()
+std::string buffer_view::Copy()
 {
-    auto ptr = std::make_unique<char[]>(length + 1);
-    for (uint32_t i = 0; i < length; i++)
-        ptr.get()[i] = buffer->GetChar(start + i);
+    std::string str;
+    str.resize(length);
 
-    ptr.get()[length] = '\0';
-    return ptr;
+    for (uint32_t i = 0; i < length; i++)
+        str[i] = buffer->GetChar(start + i);
+
+    return str;
 }

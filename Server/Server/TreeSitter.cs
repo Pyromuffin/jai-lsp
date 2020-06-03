@@ -41,6 +41,12 @@ namespace jai_lsp
         }
 
 
+        public static string GetSyntax(ulong documentHash)
+        {
+            var ptr = GetSyntaxNice(documentHash);
+            return Marshal.PtrToStringAnsi(ptr);
+        }
+
         [DllImport(dllpath)]
         extern static public long CreateTreeFromPath([MarshalAs(UnmanagedType.LPStr)] string document, [MarshalAs(UnmanagedType.LPStr)] string moduleName);
 
@@ -58,5 +64,8 @@ namespace jai_lsp
 
         [DllImport(dllpath)]
         extern static public void FindDefinition(ulong documentName, int row, int col, out ulong outFileHash, out int outRow, out int outCol);
+        
+        [DllImport(dllpath)]
+        extern static public IntPtr GetSyntaxNice(ulong documentHash);
     }
 }

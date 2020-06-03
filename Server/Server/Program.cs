@@ -45,11 +45,14 @@ namespace jai_lsp
 
         static async Task MainAsync(string[] args)
         {
-             while (!System.Diagnostics.Debugger.IsAttached)
-             {
-                 await Task.Delay(100);
-             }
 
+#if DEBUG
+            System.Diagnostics.Debugger.Launch();
+            while (!System.Diagnostics.Debugger.IsAttached)
+            {
+                await Task.Delay(100);
+            }
+#endif
             TreeSitter.Init();
 
             Log.Logger = new LoggerConfiguration()
@@ -79,7 +82,7 @@ namespace jai_lsp
                     .WithHandler<SemanticHighlight>()
                     .WithHandler<GoToDefinitionHandler>()
                     .WithServices(ConfigureServices)
-                    .WithServices(x => x.AddLogging(b => b.SetMinimumLevel(LogLevel.Trace)))
+                    .WithServices(x => x.AddLogging(b => b.SetMinimumLevel(LogLevel.Error)))
                     .WithServices(services => {
                         services.AddSingleton(provider =>
                         {
@@ -156,12 +159,15 @@ namespace jai_lsp
                             foreach(var moduleDirectory in moduleDirectories)
                             {
                                 var moduleFilePath = Path.Combine(moduleDirectory, "module.jai");
-                                var moduleName = Path.GetDirectoryName(moduleFilePath);
+
+                                // chop off path and get module name;
+                                var separatorIndex = moduleDirectory.LastIndexOf(Path.DirectorySeparatorChar);
+                                var moduleName = moduleDirectory.Substring(separatorIndex + 1);
                                 var exists = File.Exists(moduleFilePath);
                                 if(exists)
                                 {
                                     manager.OnNext(new WorkDoneProgressReport() { Message = moduleFilePath, Percentage = (double)current / count });
-                                    await Task.Run( () => TreeSitter.CreateTreeFromPath(moduleFilePath, moduleName), token);
+                                    TreeSitter.CreateTreeFromPath(moduleFilePath, moduleName);
                                     current++;
                                 }
                             }

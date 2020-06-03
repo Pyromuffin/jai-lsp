@@ -119,14 +119,14 @@ namespace jai_lsp
             return Task.FromResult(new SemanticTokensDocument(GetRegistrationOptions().Legend));
         }
 
-        async protected override Task Tokenize(SemanticTokensBuilder builder, ITextDocumentIdentifierParams identifier, CancellationToken cancellationToken)
+        protected override Task Tokenize(SemanticTokensBuilder builder, ITextDocumentIdentifierParams identifier, CancellationToken cancellationToken)
         {
             var hash = Hash.StringHash(identifier.TextDocument.Uri.GetFileSystemPath());
 
             var now = DateTime.Now;
             IntPtr tokensPtr = IntPtr.Zero;
             int count = 0;
-            long internalMicros = await Task.Run( () => TreeSitter.GetTokens(hash, out tokensPtr, out count), cancellationToken);
+            long internalMicros = TreeSitter.GetTokens(hash, out tokensPtr, out count); // this is syncrhonous because we just get the data from native side.
             var then = DateTime.Now;
             var elapsed = then - now;
             _logger.LogInformation("Elapsed time for C++ tokens: " + elapsed.TotalMilliseconds + " native time: " + internalMicros);
@@ -139,6 +139,8 @@ namespace jai_lsp
                     builder.Push(ptr[i].line, ptr[i].col, ptr[i].length, (int)ptr[i].type, (int)ptr[i].modifier);
                 }
             }
+
+            return Unit.Task;
         }
     }
 }

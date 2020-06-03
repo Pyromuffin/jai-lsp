@@ -48,17 +48,17 @@ namespace jai_lsp
 
         public TextDocumentSyncKind Change { get; } = TextDocumentSyncKind.Incremental;
 
-        public async Task<Unit> Handle(DidOpenTextDocumentParams notification, CancellationToken token)
+        public Task<Unit> Handle(DidOpenTextDocumentParams notification, CancellationToken token)
         {
             var path = notification.TextDocument.Uri.GetFileSystemPath();
             var hash = Hash.StringHash(path);
             hashNamer.hashToName[hash] = path;
 
-            await Task.Run(() => TreeSitter.CreateTree(hash, notification.TextDocument.Text, notification.TextDocument.Text.Length));
-            return Unit.Value;
+            TreeSitter.CreateTree(hash, notification.TextDocument.Text, notification.TextDocument.Text.Length);
+            return Unit.Task;
         }
 
-        public async Task<Unit> Handle(DidChangeTextDocumentParams request, CancellationToken token)
+        public Task<Unit> Handle(DidChangeTextDocumentParams request, CancellationToken token)
         {
             var documentPath = request.TextDocument.Uri.GetFileSystemPath();
             var hash = Hash.StringHash(documentPath);
@@ -68,11 +68,12 @@ namespace jai_lsp
                 var start = range.Start;
                 var end = range.End;
 
-                await Task.Run(() => TreeSitter.EditTree(hash, change.Text, start.Line, start.Character, end.Line, end.Character, change.Text.Length, change.RangeLength));
+                TreeSitter.EditTree(hash, change.Text, start.Line, start.Character, end.Line, end.Character, change.Text.Length, change.RangeLength);
             }
 
-            await Task.Run(() => TreeSitter.UpdateTree(hash));
-            return Unit.Value;
+            TreeSitter.UpdateTree(hash);
+
+            return Unit.Task;
         }
 
         TextDocumentChangeRegistrationOptions IRegistration<TextDocumentChangeRegistrationOptions>.

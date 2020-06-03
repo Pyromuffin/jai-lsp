@@ -56,12 +56,15 @@ struct ScopeEntry
 {
 	TSPoint definitionPosition;
 	TokenType type;
+#if _DEBUG
+	std::string name;
+#endif
 };
 
 struct Scope
 {
 	std::unordered_map<Hash, ScopeEntry> entries;
-	TSNode node; // this is used for finding the parent scope of a scope so that we can inject things into the outer scope
+	//TSNode node; // this is used for finding the parent scope of a scope so that we can inject things into the outer scope
 
 #if _DEBUG
 	buffer_view content;
@@ -73,6 +76,8 @@ struct FileScope
 {
 	std::vector<Hash> imports;
 	std::unordered_map<const void*, Scope> scopes;
+	std::vector<SemanticToken> tokens;
+	Scope file;
 };
 
 extern std::unordered_map<Hash, TSTree*> g_trees;
