@@ -5,6 +5,7 @@
 #include <chrono>
 #include <unordered_map>
 #include "../Tree-sitter-jai-lib/GapBuffer.h"
+#include "../External/nlohmann/json.hpp"
 
 enum class TokenType
 {
@@ -157,6 +158,17 @@ void PrintTokens(Hash documentHash)
 
 int main()
 {
+	/*
+	while (true)
+	{
+		std::string s;
+		std::cin >> s;
+		assert(false);
+		std::cout << s;
+	}
+
+	*/
+	
 	Init();
 
 	auto file = fopen(path, "r");
@@ -180,7 +192,7 @@ int main()
 		"main :: () {\n"
 		"print();\n"
 		"}\n\n"
-		"// tomato\n"
+		"/* comment */\n"
 		"#import \"Basic\";\n"
 		;
 
@@ -194,63 +206,11 @@ int main()
 	UpdateTree(documentHash);
 	std::cout << GetSyntax(documentHash) << "\n";
 
-	//PrintTokens(documentHash);
-	EditTree(documentHash, "/", 5, 0, 5, 0, 1, 0);
-	UpdateTree(documentHash);
-	std::cout << GetSyntax(documentHash) << "\n";
-
-	//PrintTokens(documentHash);
-	EditTree(documentHash, "/", 5, 0, 5, 0, 1, 0);
-	UpdateTree(documentHash);
-	std::cout << GetSyntax(documentHash) << "\n";
-
-
-
 	EditTree(documentHash, "", 5, 0, 5, 0, 0, 1);
 	UpdateTree(documentHash);
 	std::cout << GetSyntax(documentHash) << "\n";
-
-
-	EditTree(documentHash, "", 5, 0, 5, 0, 0, 1);
-	UpdateTree(documentHash);
-	std::cout << GetSyntax(documentHash) << "\n";
-
-
-
-	EditTree(documentHash, "", 5, 0, 5, 0, 0, 1);
-	UpdateTree(documentHash);
-	std::cout << GetSyntax(documentHash) << "\n";
-
-
-	/*
-	//PrintTokens(documentHash);
-	EditTree(documentHash, "/", 5, 0, 5, 0, 1, 0);
-	UpdateTree(documentHash);
-	std::cout << GetSyntax(documentHash) << "\n";
-
-
-	EditTree(documentHash, " ", 5, 1, 5, 1, 1, 0);
-	UpdateTree(documentHash);
-	std::cout << GetSyntax(documentHash) << "\n";
-
-	EditTree(documentHash, "", 5, 1, 5, 1, 0, 1);
-	UpdateTree(documentHash);
-	std::cout << GetSyntax(documentHash) << "\n";
-
-	EditTree(documentHash, "", 5, 0, 5, 0, 0, 1);
-	UpdateTree(documentHash);
-	std::cout << GetSyntax(documentHash) << "\n";
-	*/
-
-	/*
-	PrintTokens(documentHash);
-
-
-	EditTree(documentHash, "", 5, 0, 2, 0, 0, 1);
-	UpdateTree(documentHash);
-	std::cout << GetSyntax(documentHash) << "\n";
-	PrintTokens(documentHash);
-	*/
+	
+	
 }
 
 

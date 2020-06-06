@@ -27,7 +27,7 @@ export function activate(context: ExtensionContext) {
     // Otherwise the run options are used
     let serverOptions: ServerOptions = {
         run: { command: serverExe, args: ['C:\\Users\\pyrom\\Documents\\GitHub\\jai-lsp\\Server\\Server\\bin\\Release\\net5.0\\jai-lsp-server.dll'] },
-        debug: { command: serverExe, args: ['C:\\Users\\pyrom\\Documents\\GitHub\\jai-lsp\\Server\\Server\\bin\\Debug\\net5.0\\jai-lsp-server.dll'] }
+        debug: { command: serverExe, args: ['C:\\Users\\pyrom\\Documents\\GitHub\\jai-lsp\\Server\\x64\\Debug\\ParserTester.exe'] }
     }
 
     // Options to control the language client

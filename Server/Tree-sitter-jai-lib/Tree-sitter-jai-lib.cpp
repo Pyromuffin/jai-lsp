@@ -139,6 +139,24 @@ Scope* GetScopeForNode(const TSNode& node, FileScope* scope)
 	return &scope->scopes[parent.id];
 }
 
+Scope* GetScopeAndParentForNode(const TSNode& node, FileScope* scope, TSNode* outParentNode)
+{
+	auto parent = ts_node_parent(node);
+	while (!scope->scopes.contains(parent.id))
+	{
+		if (ts_node_is_null(parent))
+		{
+			return nullptr;
+		}
+
+		parent = ts_node_parent(parent);
+	}
+
+	*outParentNode = parent;
+	return &scope->scopes[parent.id];
+}
+
+
 std::string DebugNode(const TSNode& node, GapBuffer* gb)
 {
 	auto name = GetIdentifierFromBufferCopy(node, gb);
@@ -425,6 +443,9 @@ static void BuildFileScope(Hash documentHash)
 
 	bool skipNextIdentifier = false;
 	bool skipNextVarDecl = false;
+	bool scopeIsImperative = false;
+
+	// source file, struct, enum, union scopes are data scopes.
 
 	while (ts_query_cursor_next_capture(queryCursor, &match, &index))
 	{
@@ -435,6 +456,7 @@ static void BuildFileScope(Hash documentHash)
 		case ScopeMarker::localScope:
 		{
 			auto localScope = &fileScope->scopes[node.id];
+			localScope->imperative = scopeIsImperative;
 			auto start = ts_node_start_byte(node);
 			auto end = ts_node_end_byte(node);
 #if _DEBUG
@@ -458,7 +480,7 @@ static void BuildFileScope(Hash documentHash)
 #if _DEBUG
 			bigScope->content = buffer_view(start, end, buffer);
 #endif
-
+			bigScope->imperative = false;
 			scopeKing.push_back(bigScope);
 			break;
 		}
@@ -484,6 +506,7 @@ static void BuildFileScope(Hash documentHash)
 		case ScopeMarker::function_defn:
 		{
 			skipNextIdentifier = true;
+			scopeIsImperative = true;
 			AddEntry(node, TokenType::Function, fileScope, buffer);
 			break;
 		}
@@ -491,12 +514,14 @@ static void BuildFileScope(Hash documentHash)
 		case ScopeMarker::struct_defn:
 		{
 			skipNextIdentifier = true;
+			scopeIsImperative = false;
 			AddEntry(node, TokenType::Type, fileScope, buffer);
 			break;
 		}
 		case ScopeMarker::enum_defn:
 		{
 			skipNextIdentifier = true;
+			scopeIsImperative = false;
 			AddEntry(node, TokenType::Enum, fileScope, buffer);
 			break;
 		}
@@ -572,6 +597,7 @@ static void BuildFileScope(Hash documentHash)
 		case ScopeMarker::block_end:
 		{
 			scopeKing.pop_back();
+			scopeIsImperative = scopeKing.back()->imperative;
 			break;
 		}
 		case ScopeMarker::import:
@@ -597,13 +623,45 @@ static void BuildFileScope(Hash documentHash)
 		auto index = unresolvedTokenIndex[i];
 		auto node = unresolvedEntry[i];
 		auto identifierHash = GetIdentifierHash(node, buffer);
-		//auto scope = GetScopeForNode(node, fileScope);
+		TSNode parent;
+		auto scope = GetScopeAndParentForNode(node, fileScope, &parent);
 
-		//if (scope != nullptr)
-	//	{
-//			auto entry = scope->entries[identifierHash];
-//			fileScope->tokens[index].type = entry.type;
-//		}
+		// search scopes going up for entries, if they're data scopes. if they're imperative scopes then declarations have to be in order.
+		bool foundInLocalScopes = false;
+
+		while (scope != nullptr)
+		{
+			if (scope->entries.contains(identifierHash))
+			{
+				// if the scope is imperative, then respect ordering, if it is not, just add the entry.
+				if (scope->imperative)
+				{
+					auto definition = scope->entries[identifierHash].definitionNode;
+					auto definitionStart = ts_node_start_byte(definition);
+					auto identifierStart = ts_node_start_byte(node);
+					if (identifierStart >= definitionStart)
+					{
+						auto entry = scope->entries[identifierHash];
+						fileScope->tokens[index].type = entry.type;
+						foundInLocalScopes = true;
+						break;
+					}
+				}
+				else
+				{
+					auto entry = scope->entries[identifierHash];
+					fileScope->tokens[index].type = entry.type;
+					foundInLocalScopes = true;
+					break;
+				}
+			}
+
+			scope = GetScopeAndParentForNode(parent, fileScope, &parent); // aliasing???
+		}
+
+		if (foundInLocalScopes)
+			continue;
+
 		if(fileScope->file.entries.contains(identifierHash))
 		{
 			auto entry = fileScope->file.entries[identifierHash];
@@ -625,8 +683,8 @@ static void BuildFileScope(Hash documentHash)
 				}
 			}
 
-			if(!found)
-				fileScope->tokens[index].length = 0;
+			if (!found)
+				fileScope->tokens[index].type = (TokenType)-1;
 		}
 	}
 
@@ -833,11 +891,13 @@ export long long UpdateTree(Hash documentHash)
 		tree,
 		input);
 
+	/*
 	// hack to fix incorrect incremental parsing for now!
 	editedTree = ts_parser_parse(
 		parser,
 		editedTree,
 		input);
+	*/
 
 	g_trees[documentHash] = editedTree;
 
@@ -912,81 +972,6 @@ export const char* GetCompletionItems(const char* code, int row, int col)
 	return names;
 	*/
 	return nullptr;
-}
-
-
-static void AddVaraibleReferenceTokens(FileScope* fileScope, TSNode root_node, GapBuffer* buffer, std::vector<SemanticToken>& tokens)
-{
-	uint32_t error_offset;
-	TSQueryError error_type;
-	auto queryText =
-		"(identifier) @var_ref";
-
-	auto var_decl_query = ts_query_new(
-		s_jaiLang,
-		queryText,
-		strlen(queryText),
-		&error_offset,
-		&error_type
-	);
-
-	TSQueryCursor* queryCursor = ts_query_cursor_new();
-	ts_query_cursor_exec(queryCursor, var_decl_query, root_node);
-
-	TSQueryMatch match;
-	uint32_t index;
-	int cursor = 0;
-
-	while (ts_query_cursor_next_capture(queryCursor, &match, &index))
-	{
-		auto identifierNode = match.captures[index].node;
-		auto captureIndex = match.captures[index].index;
-		auto start = ts_node_start_point(identifierNode);
-		auto end = ts_node_end_point(identifierNode);
-
-		SemanticToken token;
-		token.col = start.column;
-		token.line = start.row;
-		token.length = end.column - start.column;
-		token.modifier = (TokenModifier)0;
-
-		auto identifierHash = GetIdentifierHash(identifierNode, buffer);
-		auto scope = GetScopeForNode(identifierNode, fileScope);
-
-		if (scope != nullptr)
-		{
-			auto entry = scope->entries[identifierHash];
-			token.type = entry.type;
-			tokens.push_back(token);
-		}
-		else
-		{
-			if (fileScope->file.entries.contains(identifierHash))
-			{
-				auto entry = fileScope->file.entries[identifierHash];
-				token.type = entry.type;
-				tokens.push_back(token);
-			}
-			else
-			{
-				// search modules
-				for (int i = 0; i < fileScope->imports.size(); i++)
-				{
-					auto importHash = fileScope->imports[i];
-					auto moduleScope = &g_modules[importHash];
-					if (moduleScope->entries.contains(identifierHash))
-					{
-						auto entry = moduleScope->entries[identifierHash];
-						token.type = entry.type;
-						tokens.push_back(token);
-					}
-				}
-			}
-		}
-	}
-
-	ts_query_cursor_delete(queryCursor);
-	ts_query_delete(var_decl_query);
 }
 
 

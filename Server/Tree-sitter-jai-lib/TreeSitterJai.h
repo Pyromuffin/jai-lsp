@@ -63,6 +63,7 @@ struct ScopeEntry
 
 struct Scope
 {
+	bool imperative;
 	std::unordered_map<Hash, ScopeEntry> entries;
 	//TSNode node; // this is used for finding the parent scope of a scope so that we can inject things into the outer scope
 

@@ -148,6 +148,7 @@ namespace jai_lsp
                         using var manager = languageServer.ProgressManager.Create(new WorkDoneProgressBegin() { Title = "Parsing Modules", Percentage = 0, Cancellable = true });
                         var logger = languageServer.Services.GetService<ILogger<Logjam>>();
                         var namer = languageServer.Services.GetService<HashNamer>();
+                        namer.document = languageServer.Document;
 
                         WorkspaceFolderParams wsf = new WorkspaceFolderParams();
                         var wsfresults = await languageServer.Client.SendRequest(wsf, token);

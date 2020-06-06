@@ -5,7 +5,10 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document.Server.Proposals;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models.Proposals;
+using OmniSharp.Extensions.LanguageServer.Protocol.Server;
+using OmniSharp.Extensions.LanguageServer.Server;
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -92,8 +95,9 @@ namespace jai_lsp
         };
 
         ILogger _logger;
+        HashNamer namer;
 
-        public SemanticHighlight(ILogger<SemanticTokens> logger) : base(new SemanticTokensRegistrationOptions()
+        public SemanticHighlight(ILogger<SemanticTokens> logger, HashNamer namer) : base(new SemanticTokensRegistrationOptions()
         {
             DocumentSelector = DocumentSelector.ForLanguage("jai"),
             Legend = new SemanticTokensLegend() {
@@ -109,6 +113,7 @@ namespace jai_lsp
         })
         {
             _logger = logger;
+            this.namer = namer;
         }
 
         protected override Task<SemanticTokensDocument> GetSemanticTokensDocument(ITextDocumentIdentifierParams @params, CancellationToken cancellationToken)
@@ -131,14 +136,34 @@ namespace jai_lsp
             var elapsed = then - now;
             _logger.LogInformation("Elapsed time for C++ tokens: " + elapsed.TotalMilliseconds + " native time: " + internalMicros);
 
+            PublishDiagnosticsParams diagnosticParams = new PublishDiagnosticsParams();
+            List<Diagnostic> diagnostics = new List<Diagnostic>();
+            diagnosticParams.Uri = identifier.TextDocument.Uri;
+
             unsafe
             {
                 SemanticToken* ptr = (SemanticToken*)tokensPtr;
                 for (int i = 0; i < count; i++)
                 {
+                    if((int)ptr[i].type == -1)
+                    {
+                        Diagnostic diag = new Diagnostic();
+                        diag.Severity = DiagnosticSeverity.Error;
+                        diag.Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range();
+                        diag.Range.Start = new Position(ptr[i].line, ptr[i].col);
+                        diag.Range.End = new Position(ptr[i].line, ptr[i].col + ptr[i].length);
+                        diag.Message = "undeclared identifer";
+                        diagnostics.Add(diag);
+
+                        continue;
+                    }
+
                     builder.Push(ptr[i].line, ptr[i].col, ptr[i].length, (int)ptr[i].type, (int)ptr[i].modifier);
                 }
             }
+
+            diagnosticParams.Diagnostics = diagnostics;
+            namer.document.PublishDiagnostics(diagnosticParams);
 
             return Unit.Task;
         }
