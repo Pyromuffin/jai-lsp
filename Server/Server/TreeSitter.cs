@@ -76,5 +76,9 @@ namespace jai_lsp
         
         [DllImport(dllpath)]
         extern static public IntPtr GetSyntaxNice(ulong documentHash);
+
+        [DllImport(dllpath)]
+        extern static public IntPtr Hover(ulong documentName, int row, int col);
+
     }
 }

@@ -36,16 +36,16 @@ export void FindDefinition(Hash documentName, int row, int col, Hash* outFileHas
 
 	auto identifierNode = ts_node_named_descendant_for_point_range(root, point, point);
 	auto identifierHash = GetIdentifierHash(identifierNode, buffer);
-	auto scope = GetScopeForNode(identifierNode, fileScope);
+	TSNode parent;
+	auto scope = GetScopeAndParentForNode(identifierNode, fileScope, &parent);
 
-	Range target, selection;
 	*outOriginRange = NodeToRange(identifierNode);
 
 	if (scope != nullptr && scope->entries.contains(identifierHash))
 	{
 		auto entry = scope->entries[identifierHash];
 		*outFileHash = documentName;
-		*outTargetRange = NodeToRange(entry.definitionNode);
+		*outTargetRange = NodeToRange(parent);
 		*outSelectionRange = NodeToRange(entry.definitionNode);
 		ts_tree_delete(tree);
 		return;

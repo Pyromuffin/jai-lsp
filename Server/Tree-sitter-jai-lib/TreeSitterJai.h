@@ -52,10 +52,25 @@ struct SemanticToken
 	TokenModifier modifier;
 };
 
-struct ScopeEntry
+struct Type;
+
+struct Member
+{
+	const char* name;
+	Type* type;
+};
+
+struct Type
+{
+	const char* name;
+	std::unordered_map<Hash, Member> members;
+};
+
+struct ScopeDeclaration
 {
 	TSNode definitionNode;
-	TokenType type;
+	TokenType tokenType;
+	Type* type;
 #if _DEBUG
 	std::string name;
 #endif
@@ -64,8 +79,7 @@ struct ScopeEntry
 struct Scope
 {
 	bool imperative;
-	std::unordered_map<Hash, ScopeEntry> entries;
-	//TSNode node; // this is used for finding the parent scope of a scope so that we can inject things into the outer scope
+	std::unordered_map<Hash, ScopeDeclaration> entries;
 
 #if _DEBUG
 	buffer_view content;
@@ -73,11 +87,12 @@ struct Scope
 	
 };
 
-struct ModuleScopeEntry
+struct ModuleScopeDeclaration
 {
 	TSNode definitionNode;
 	Hash definingFile;
-	TokenType type;
+	TokenType tokenType; // might not need this anymore because we can get it from type
+	Type* type;
 
 #if _DEBUG
 	std::string name;
@@ -86,8 +101,7 @@ struct ModuleScopeEntry
 
 struct ModuleScope
 {
-	std::unordered_map<Hash, ModuleScopeEntry> entries;
-	//TSNode node; // this is used for finding the parent scope of a scope so that we can inject things into the outer scope
+	std::unordered_map<Hash, ModuleScopeDeclaration> entries;
 
 #if _DEBUG
 	buffer_view content;
@@ -109,7 +123,7 @@ extern std::unordered_map<Hash, ModuleScope> g_modules;
 extern std::unordered_map<Hash, FileScope> g_fileScopes;
 
 std::string_view GetIdentifier(const TSNode& node, std::string_view code);
-buffer_view GetIdentifier(const TSNode& node, GapBuffer* buffer);
 Hash GetIdentifierHash(const TSNode& node, std::string_view code);
 Hash GetIdentifierHash(const TSNode& node, GapBuffer* buffer);
 Scope* GetScopeForNode(const TSNode& node, FileScope* scope);
+Scope* GetScopeAndParentForNode(const TSNode& node, FileScope* scope, TSNode* outParentNode);

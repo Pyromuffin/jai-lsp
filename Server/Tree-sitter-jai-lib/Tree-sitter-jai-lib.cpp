@@ -22,6 +22,7 @@ std::unordered_map<Hash, FileScope> g_fileScopes;
 
 static TSLanguage* s_jaiLang;
 static TSSymbol s_constDecl;
+static TSSymbol s_import;
 static TSSymbol s_varDecl;
 static TSSymbol s_funcDecl;
 static TSSymbol s_structDecl;
@@ -29,6 +30,28 @@ static TSSymbol s_structDecl;
 static char names[1000];
 export long long UpdateTree(Hash documentHash);
 
+static std::unordered_map<Hash, Type*> s_builtInTypes;
+
+static void SetupBuiltInTypes()
+{
+	s_builtInTypes[StringHash("bool")] = new Type{ .name = "bool" };
+	s_builtInTypes[StringHash("float32")] = new  Type{ .name = "float32" };
+	s_builtInTypes[StringHash("float")] = s_builtInTypes[StringHash("float32")];
+	s_builtInTypes[StringHash("float64")] = new Type{ .name = "float64" };
+	s_builtInTypes[StringHash("char")] = new Type{ .name = "char" };
+	s_builtInTypes[StringHash("string")] = new Type{ .name = "string" }; // string has some members like data and length.
+	s_builtInTypes[StringHash("s8")] = new Type{ .name = "s8" };
+	s_builtInTypes[StringHash("s16")] = new Type{ .name = "s16" };
+	s_builtInTypes[StringHash("s32")] = new Type{ .name = "s32" };
+	s_builtInTypes[StringHash("s64")] = new Type{ .name = "s64" };
+	s_builtInTypes[StringHash("int")] = s_builtInTypes[StringHash("s64")]; // s64?
+	s_builtInTypes[StringHash("u8")] = new Type{ .name = "u8" };
+	s_builtInTypes[StringHash("u16")] = new Type{ .name = "u16" };
+	s_builtInTypes[StringHash("u32")] = new Type{ .name = "u32" };
+	s_builtInTypes[StringHash("u64")] = new Type{ .name = "u64" };
+	s_builtInTypes[StringHash("void")] = new Type{ .name = "void" };
+
+}
 
 export int Init()
 {
@@ -37,6 +60,9 @@ export int Init()
 	s_varDecl = ts_language_symbol_for_name(s_jaiLang, "named_decl", strlen("named_decl"), true);
 	s_funcDecl = ts_language_symbol_for_name(s_jaiLang, "named_block_decl", strlen("named_block_decl"), true);
 	s_structDecl = ts_language_symbol_for_name(s_jaiLang, "struct_definition", strlen("struct_definition"), true);
+	s_import = ts_language_symbol_for_name(s_jaiLang, "import_statement", strlen("import_statement"), true);
+	s_structDecl = ts_language_symbol_for_name(s_jaiLang, "struct_definition", strlen("struct_definition"), true);
+	SetupBuiltInTypes();
 	return 69420;
 }
 
@@ -198,16 +224,9 @@ static std::vector<std::string_view> BuildModuleScope(Hash document, const char*
 	std::vector<std::string_view> loads;
 
 	auto queryText =
-		//"(source_file (named_decl name: (identifier) @definition))"
-		//"(source_file (named_block_decl name: (identifier) @func_defn (function_definition)))"
-		//"(source_file (named_block_decl name: (identifier) @struct_defn (struct_definition)))"
-		
 		"(source_file (named_decl (names (identifier) @definition)))"
-		//"(source_file (named_decl (names (identifier) @definition) \":\" \":\"))"
-		"(source_file (named_block_decl (names (identifier) @func_defn) (function_definition)))"
-		"(source_file (named_block_decl (names (identifier) @struct_defn) (struct_definition)))"
-		//"(source_file (named_block_decl (names (identifier) @enum_defn) (enum_definition)))"
-		
+		"(source_file (named_decl (names (identifier) @func_defn) (function_definition (function_header) @func_defn)))"
+		"(source_file (named_decl (names (identifier) @struct_defn) (struct_definition)))"
 		
 		"(export_scope_directive) @export"
 		"(file_scope_directive) @file"
@@ -254,9 +273,9 @@ static std::vector<std::string_view> BuildModuleScope(Hash document, const char*
 		{
 			if (!exporting)
 				continue;
-			ModuleScopeEntry entry;
+			ModuleScopeDeclaration entry;
 			entry.definitionNode = node;
-			entry.type = GetTokenTypeForNode(node);
+			entry.tokenType = GetTokenTypeForNode(node);
 			entry.definingFile = document;
 #if _DEBUG
 			entry.name = GetIdentifierFromBufferCopy(node, buffer);
@@ -275,14 +294,25 @@ static std::vector<std::string_view> BuildModuleScope(Hash document, const char*
 		{
 			if (!exporting)
 				continue;
-			ModuleScopeEntry entry;
+
+			ModuleScopeDeclaration entry;
 			entry.definitionNode = node;
-			entry.type = TokenType::Function;
+			entry.tokenType = TokenType::Function;
 			entry.definingFile = document;
 
 #if _DEBUG
 			entry.name = GetIdentifierFromBufferCopy(node, buffer);
 #endif
+
+			TSQueryMatch typeMatch;
+			uint32_t nextTypeIndex;
+			ts_query_cursor_next_capture(queryCursor, &typeMatch, &nextTypeIndex);
+			auto headerNode = typeMatch.captures[nextTypeIndex].node;
+
+			Type* type = new Type();
+			type->name = GetIdentifierFromBuffer(headerNode, buffer).CopyMalloc();
+			entry.type = type;
+
 			scope.entries[GetIdentifierHash(node, code)] = entry;
 			break;
 		}
@@ -290,10 +320,15 @@ static std::vector<std::string_view> BuildModuleScope(Hash document, const char*
 		{
 			if (!exporting)
 				continue;
-			ModuleScopeEntry entry;
+
+			Type* type = new Type(); // leak this 
+			type->name = GetIdentifierFromBuffer(node, buffer).CopyMalloc(); // leak this too!
+
+			ModuleScopeDeclaration entry;
 			entry.definitionNode = node;
-			entry.type = TokenType::Type;
+			entry.tokenType = TokenType::Type;
 			entry.definingFile = document;
+			entry.type = type;
 
 #if _DEBUG
 			entry.name = GetIdentifierFromBufferCopy(node, buffer);
@@ -335,10 +370,11 @@ static int CountParents(TSNode node)
 	return parents;
 }
 
-static ScopeEntry AddEntryToScope(TSNode node, TokenType type, GapBuffer* buffer, Scope* scope)
+static ScopeDeclaration AddEntryToScope(TSNode node, TokenType tokenType, GapBuffer* buffer, Scope* scope, Type* type)
 {
-	ScopeEntry entry;
+	ScopeDeclaration entry;
 	entry.definitionNode = node;
+	entry.tokenType = tokenType;
 	entry.type = type;
 #if _DEBUG
 	entry.name = GetIdentifierFromBufferCopy(node, buffer);
@@ -348,7 +384,7 @@ static ScopeEntry AddEntryToScope(TSNode node, TokenType type, GapBuffer* buffer
 	return entry;
 }
 
-static ScopeEntry AddEntry(TSNode node, TokenType type, FileScope* fileScope, GapBuffer* buffer)
+static ScopeDeclaration AddEntry(TSNode node, TokenType tokenType, FileScope* fileScope, GapBuffer* buffer, Type* type)
 {
 	Scope* scope = GetScopeForNode(node, fileScope);
 	if (scope == nullptr)
@@ -364,11 +400,57 @@ static ScopeEntry AddEntry(TSNode node, TokenType type, FileScope* fileScope, Ga
 	token.line = start.row;
 	token.length = end.column - start.column;
 	token.modifier = (TokenModifier)0;
-	token.type = type;
+	token.type = tokenType;
 	fileScope->tokens.push_back(token);
 
-	return AddEntryToScope(node, type, buffer, scope);
+	return AddEntryToScope(node, tokenType, buffer, scope, type);
 }
+
+
+
+
+
+
+Type* EvaluateNodeExpressionType(TSNode node, GapBuffer* buffer, const std::vector<Scope*>& scopeKing, FileScope* fileScope)
+{
+	static auto builtInTypeSymbol = ts_language_symbol_for_name(s_jaiLang, "built_in_type", strlen("built_in_type"), true);
+	static auto identifierSymbol = ts_language_symbol_for_name(s_jaiLang, "identifier", strlen("identifier"), true);
+
+	auto symbol = ts_node_symbol(node);
+	auto hash = GetIdentifierHash(node, buffer);
+
+	if (symbol == builtInTypeSymbol)
+	{
+		return s_builtInTypes[hash];
+	}
+	else if (symbol == identifierSymbol)
+	{
+		// identifier of some kind. struct, union, or enum.
+		for (int sp = 0; sp < scopeKing.size(); sp++)
+		{
+			int index = scopeKing.size() - sp - 1;
+			auto frame = scopeKing[index];
+			if (frame->entries.contains(hash))
+			{
+				return frame->entries[hash].type;
+			}
+		}
+
+		// search modules
+		for (auto moduleHash : fileScope->imports)
+		{
+			auto moduleScope = &g_modules[moduleHash];
+			if (moduleScope->entries.contains(hash))
+			{
+				return moduleScope->entries[hash].type;
+			}
+		}
+	}
+
+	// unresolved type or expression of some kind.
+	return nullptr;
+}
+
 
 static void BuildFileScope(Hash documentHash)
 {
@@ -388,17 +470,17 @@ static void BuildFileScope(Hash documentHash)
 	
 
 	auto queryText =
-		
 		"(source_file) @file.scope"
-		"(block) @local.scope"
-		"(for_loop) @local.scope"
+		"(data_scope) @data.scope"
+		"(imperative_scope) @imperative.scope"
 
-		"(named_decl (names (identifier) @const_decl) \":\" \":\")"
-		"(named_decl (names (identifier) @var_decl))"
-		"(named_block_decl (names (identifier) @func_defn) (function_definition))"
-		"(named_block_decl (names (identifier) @struct_defn) (struct_definition))"
-		"(named_block_decl (names (identifier) @enum_defn) (enum_definition))"
-		"(parameter name: (identifier) @parameter_decl)"
+		"(named_decl (names (identifier) @const_decl) (const_initializer))"
+		"(named_decl (names (identifier) @var_decl) (variable_initializer))"
+		"(named_decl (names (identifier) @var_decl) type: (*) @expr )"
+		"(named_decl (names (identifier) @func_defn) (function_definition (function_header) @func_defn))"
+		"(named_decl (names (identifier) @struct_defn) (struct_definition))"
+		"(named_decl (names (identifier) @enum_defn) (enum_definition))"
+		"(parameter (identifier) @parameter_decl)"
 		"(identifier) @var_ref"
 		"(block_end) @block_end"
 		"(import_statement name: (string_literal) @import)"
@@ -424,9 +506,11 @@ static void BuildFileScope(Hash documentHash)
 	enum class ScopeMarker
 	{
 		fileScope,
-		localScope,
+		dataScope,
+		imperativeScope,
 		const_decl,
 		var_decl,
+		expr,
 		function_defn,
 		struct_defn,
 		enum_defn,
@@ -442,10 +526,6 @@ static void BuildFileScope(Hash documentHash)
 	std::vector<int> unresolvedTokenIndex;
 
 	bool skipNextIdentifier = false;
-	bool skipNextVarDecl = false;
-	bool scopeIsImperative = false;
-
-	// source file, struct, enum, union scopes are data scopes.
 
 	while (ts_query_cursor_next_capture(queryCursor, &match, &index))
 	{
@@ -453,10 +533,10 @@ static void BuildFileScope(Hash documentHash)
 		auto node = match.captures[index].node;
 		switch (captureType)
 		{
-		case ScopeMarker::localScope:
+		case ScopeMarker::dataScope:
 		{
 			auto localScope = &fileScope->scopes[node.id];
-			localScope->imperative = scopeIsImperative;
+			localScope->imperative = false;
 			auto start = ts_node_start_byte(node);
 			auto end = ts_node_end_byte(node);
 #if _DEBUG
@@ -465,10 +545,29 @@ static void BuildFileScope(Hash documentHash)
 			// if we have any paremeters, inject them here.
 			for (int i = 0; i < parameters.size(); i++)
 			{
-				AddEntryToScope(parameters[i], TokenType::Variable, buffer, localScope);
+				AddEntryToScope(parameters[i], TokenType::Variable, buffer, localScope, nullptr);
 			}
 			parameters.clear();
 			
+			scopeKing.push_back(localScope);
+			break;
+		}
+		case ScopeMarker::imperativeScope:
+		{
+			auto localScope = &fileScope->scopes[node.id];
+			localScope->imperative = true;
+			auto start = ts_node_start_byte(node);
+			auto end = ts_node_end_byte(node);
+#if _DEBUG
+			localScope->content = buffer_view(start, end, buffer);
+#endif
+			// if we have any paremeters, inject them here.
+			for (int i = 0; i < parameters.size(); i++)
+			{
+				AddEntryToScope(parameters[i], TokenType::Variable, buffer, localScope, nullptr);
+			}
+			parameters.clear();
+
 			scopeKing.push_back(localScope);
 			break;
 		}
@@ -481,48 +580,90 @@ static void BuildFileScope(Hash documentHash)
 			bigScope->content = buffer_view(start, end, buffer);
 #endif
 			bigScope->imperative = false;
+			// uhhh just do all the imports now lol!
+
+			auto named_count = ts_node_named_child_count(node);
+			auto cursor = ts_tree_cursor_new(node);
+			if (ts_tree_cursor_goto_first_child(&cursor))
+			{
+				//non empty tree:
+				while (ts_tree_cursor_goto_next_sibling(&cursor))
+				{
+					auto current = ts_tree_cursor_current_node(&cursor);
+					if (ts_node_symbol(current) == s_import)
+					{
+						auto nameNode = ts_node_named_child(current, 0);
+						auto startOffset = ts_node_start_byte(nameNode) + 1;
+						auto endOffset = ts_node_end_byte(nameNode) - 1;
+						buffer_view view = buffer_view(startOffset, endOffset, buffer);
+						auto moduleNameHash = StringHash(view);
+						fileScope->imports.push_back(moduleNameHash);
+					}
+				}
+			}
+
+			ts_tree_cursor_delete(&cursor);
 			scopeKing.push_back(bigScope);
 			break;
 		}
 		case ScopeMarker::var_decl:
 		{
-			if (!skipNextVarDecl)
+			// get the expr node
+			TSQueryMatch typeMatch;
+			uint32_t nextTypeIndex;
+			ts_query_cursor_next_capture(queryCursor, &typeMatch, &nextTypeIndex);
+			ts_query_cursor_next_capture(queryCursor, &typeMatch, &nextTypeIndex);
+
+			ScopeMarker captureType = (ScopeMarker)typeMatch.captures[nextTypeIndex].index;
+			auto exprNode = typeMatch.captures[nextTypeIndex].node;
+
+			Type* exprType = nullptr;
+			if (captureType == ScopeMarker::expr)
 			{
-				skipNextIdentifier = true;
-				AddEntry(node, TokenType::Variable, fileScope, buffer);
+				// evaluate the type of this node lmfao
+				exprType = EvaluateNodeExpressionType(exprNode, buffer, scopeKing, fileScope);
 			}
-			skipNextVarDecl = false;
+
+			AddEntry(node, TokenType::Variable, fileScope, buffer, exprType);
 			break;
 		}
 		
 		case ScopeMarker::const_decl:
 		{
 			skipNextIdentifier = true;
-			skipNextVarDecl = true; // this is complicated and kind of dumb.
-			AddEntry(node, TokenType::Number, fileScope, buffer);
+			AddEntry(node, TokenType::Number, fileScope, buffer, nullptr);
 			break;
 		}
 		
 		case ScopeMarker::function_defn:
 		{
-			skipNextIdentifier = true;
-			scopeIsImperative = true;
-			AddEntry(node, TokenType::Function, fileScope, buffer);
+			TSQueryMatch typeMatch;
+			uint32_t nextTypeIndex;
+			ts_query_cursor_next_capture(queryCursor, &typeMatch, &nextTypeIndex); // skip identifier
+			ts_query_cursor_next_capture(queryCursor, &typeMatch, &nextTypeIndex);
+
+			ScopeMarker captureType = (ScopeMarker)typeMatch.captures[nextTypeIndex].index;
+			auto headerNode = typeMatch.captures[nextTypeIndex].node;
+
+			Type* type = new Type();
+			type->name = GetIdentifierFromBuffer(headerNode, buffer).CopyMalloc();
+
+			AddEntry(node, TokenType::Function, fileScope, buffer, type);
 			break;
 		}
 		
 		case ScopeMarker::struct_defn:
 		{
 			skipNextIdentifier = true;
-			scopeIsImperative = false;
-			AddEntry(node, TokenType::Type, fileScope, buffer);
+			Type* type = new Type(); // leak this 
+			type->name = GetIdentifierFromBuffer(node, buffer).CopyMalloc(); // leak this too!
+			AddEntry(node, TokenType::Type, fileScope, buffer, type);
 			break;
 		}
 		case ScopeMarker::enum_defn:
 		{
 			skipNextIdentifier = true;
-			scopeIsImperative = false;
-			AddEntry(node, TokenType::Enum, fileScope, buffer);
+			AddEntry(node, TokenType::Enum, fileScope, buffer, nullptr);
 			break;
 		}
 		
@@ -567,7 +708,7 @@ static void BuildFileScope(Hash documentHash)
 					auto frame = scopeKing[index];
 					if (frame->entries.contains(hash))
 					{
-						token.type = frame->entries[hash].type;
+						token.type = frame->entries[hash].tokenType;
 						goto done;
 					}
 				}
@@ -578,7 +719,7 @@ static void BuildFileScope(Hash documentHash)
 					auto moduleScope = &g_modules[moduleHash];
 					if( moduleScope->entries.contains(hash) )
 					{
-						token.type = moduleScope->entries[hash].type;
+						token.type = moduleScope->entries[hash].tokenType;
 						goto done;
 					}
 				}
@@ -597,17 +738,19 @@ static void BuildFileScope(Hash documentHash)
 		case ScopeMarker::block_end:
 		{
 			scopeKing.pop_back();
-			scopeIsImperative = scopeKing.back()->imperative;
 			break;
 		}
 		case ScopeMarker::import:
 		{
+			break;
+			/*
 			// elide the quotation marks
 			auto startOffset = ts_node_start_byte(node) + 1;
 			auto endOffset = ts_node_end_byte(node) - 1;
 			buffer_view view = buffer_view(startOffset, endOffset, buffer);
 			auto moduleNameHash = StringHash(view);
 			fileScope->imports.push_back(moduleNameHash);
+			*/
 		}
 		break;
 
@@ -642,7 +785,7 @@ static void BuildFileScope(Hash documentHash)
 					if (identifierStart >= definitionStart)
 					{
 						auto entry = scope->entries[identifierHash];
-						fileScope->tokens[index].type = entry.type;
+						fileScope->tokens[index].type = entry.tokenType;
 						foundInLocalScopes = true;
 						break;
 					}
@@ -650,7 +793,7 @@ static void BuildFileScope(Hash documentHash)
 				else
 				{
 					auto entry = scope->entries[identifierHash];
-					fileScope->tokens[index].type = entry.type;
+					fileScope->tokens[index].type = entry.tokenType;
 					foundInLocalScopes = true;
 					break;
 				}
@@ -665,7 +808,7 @@ static void BuildFileScope(Hash documentHash)
 		if(fileScope->file.entries.contains(identifierHash))
 		{
 			auto entry = fileScope->file.entries[identifierHash];
-			fileScope->tokens[index].type = entry.type;
+			fileScope->tokens[index].type = entry.tokenType;
 		}
 		else
 		{
@@ -677,7 +820,7 @@ static void BuildFileScope(Hash documentHash)
 				if (moduleScope->entries.contains(identifierHash))
 				{
 					auto entry = moduleScope->entries[identifierHash];
-					fileScope->tokens[index].type = entry.type;
+					fileScope->tokens[index].type = entry.tokenType;
 					found = true;
 					break;
 				}

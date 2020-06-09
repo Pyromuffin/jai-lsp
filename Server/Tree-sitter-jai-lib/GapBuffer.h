@@ -82,6 +82,7 @@ struct buffer_view
     buffer_view(int start, int end, GapBuffer* buffer);
 
     std::string Copy();
+    char* CopyMalloc();
 };
 
 

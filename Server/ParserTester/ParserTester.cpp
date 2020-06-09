@@ -190,27 +190,12 @@ int main()
 
 	const char* test1 =
 		"main :: () {\n"
-		"print();\n"
+		"foo : int;\n"
 		"}\n\n"
-		"/* comment */\n"
-		"#import \"Basic\";\n"
 		;
 
-	int tries = 5;
-	// CreateTreeFromPath(modulePath, "Basic");
 	CreateTree(documentHash, test1, strlen(test1));
-	std::cout << GetSyntax(documentHash) << "\n";
-	
-	//PrintTokens(documentHash);
-	EditTree(documentHash, "/", 5, 0, 5, 0, 1, 0);
-	UpdateTree(documentHash);
-	std::cout << GetSyntax(documentHash) << "\n";
 
-	EditTree(documentHash, "", 5, 0, 5, 0, 0, 1);
-	UpdateTree(documentHash);
-	std::cout << GetSyntax(documentHash) << "\n";
-	
-	
 }
 
 

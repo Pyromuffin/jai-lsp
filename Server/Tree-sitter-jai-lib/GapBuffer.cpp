@@ -285,3 +285,15 @@ std::string buffer_view::Copy()
 
     return str;
 }
+
+char* buffer_view::CopyMalloc()
+{
+    char* str = (char*)malloc(length + 1);
+
+    for (uint32_t i = 0; i < length; i++)
+        str[i] = buffer->GetChar(start + i);
+
+    str[length] = '\0';
+
+    return str;
+}

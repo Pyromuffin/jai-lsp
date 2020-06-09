@@ -177,6 +177,7 @@
   <ItemGroup>
     <ClCompile Include="DefinitionFinder.cpp" />
     <ClCompile Include="GapBuffer.cpp" />
+    <ClCompile Include="Hoverer.cpp" />
     <ClCompile Include="lib.c" />
     <ClCompile Include="Timer.cpp" />
     <ClCompile Include="Tree-sitter-jai-lib.cpp" />

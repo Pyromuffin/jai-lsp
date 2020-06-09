@@ -96,8 +96,14 @@ namespace jai_lsp
 
         public Task<Hover> Handle(HoverParams request, CancellationToken cancellationToken)
         {
+            var hash = Hash.StringHash(request.TextDocument.Uri.GetFileSystemPath());
+            var ptr = TreeSitter.Hover(hash, request.Position.Line, request.Position.Character);
+            var str = System.Runtime.InteropServices.Marshal.PtrToStringAnsi(ptr);
             var hover = new Hover();
-            hover.Contents = new MarkedStringsOrMarkupContent("Lomato!");
+            if (str != null)
+            {
+                hover.Contents = new MarkedStringsOrMarkupContent(str);
+            }
             return Task.FromResult(hover);
         }
 
