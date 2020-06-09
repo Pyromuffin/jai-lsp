@@ -18,9 +18,9 @@ std::unordered_map<Hash, TSTree*> g_trees;
 std::unordered_map<Hash, GapBuffer> g_buffers;
 std::unordered_map<Hash, ModuleScope> g_modules;
 std::unordered_map<Hash, FileScope> g_fileScopes;
+TSLanguage* g_jaiLang;
 
 
-static TSLanguage* s_jaiLang;
 static TSSymbol s_constDecl;
 static TSSymbol s_import;
 static TSSymbol s_varDecl;
@@ -55,13 +55,13 @@ static void SetupBuiltInTypes()
 
 export int Init()
 {
-	s_jaiLang = tree_sitter_jai();
-	s_constDecl = ts_language_symbol_for_name(s_jaiLang, "constant_definition", strlen("constant_definition"), true);
-	s_varDecl = ts_language_symbol_for_name(s_jaiLang, "named_decl", strlen("named_decl"), true);
-	s_funcDecl = ts_language_symbol_for_name(s_jaiLang, "named_block_decl", strlen("named_block_decl"), true);
-	s_structDecl = ts_language_symbol_for_name(s_jaiLang, "struct_definition", strlen("struct_definition"), true);
-	s_import = ts_language_symbol_for_name(s_jaiLang, "import_statement", strlen("import_statement"), true);
-	s_structDecl = ts_language_symbol_for_name(s_jaiLang, "struct_definition", strlen("struct_definition"), true);
+	g_jaiLang = tree_sitter_jai();
+	s_constDecl = ts_language_symbol_for_name(g_jaiLang, "constant_definition", strlen("constant_definition"), true);
+	s_varDecl = ts_language_symbol_for_name(g_jaiLang, "named_decl", strlen("named_decl"), true);
+	s_funcDecl = ts_language_symbol_for_name(g_jaiLang, "named_block_decl", strlen("named_block_decl"), true);
+	s_structDecl = ts_language_symbol_for_name(g_jaiLang, "struct_definition", strlen("struct_definition"), true);
+	s_import = ts_language_symbol_for_name(g_jaiLang, "import_statement", strlen("import_statement"), true);
+	s_structDecl = ts_language_symbol_for_name(g_jaiLang, "struct_definition", strlen("struct_definition"), true);
 	SetupBuiltInTypes();
 	return 69420;
 }
@@ -151,6 +151,7 @@ TokenType GetTokenTypeForNode(const TSNode& node)
 
 Scope* GetScopeForNode(const TSNode& node, FileScope* scope)
 {
+	
 	auto parent = ts_node_parent(node);
 	while (!scope->scopes.contains(parent.id))
 	{
@@ -206,7 +207,7 @@ Scope* GetScopeForNodeDebug(const TSNode& node, FileScope* scope, GapBuffer* gb)
 
 		auto parentName = GetIdentifierFromBufferCopy(parent, gb);
 		auto parentSymbol = ts_node_symbol(parent);
-		auto symbolName = ts_language_symbol_name(s_jaiLang, parentSymbol);
+		auto symbolName = ts_language_symbol_name(g_jaiLang, parentSymbol);
 
 		parent = ts_node_parent(parent);
 	}
@@ -237,7 +238,7 @@ static std::vector<std::string_view> BuildModuleScope(Hash document, const char*
 	TSQueryError error_type;
 
 	auto query = ts_query_new(
-		s_jaiLang,
+		g_jaiLang,
 		queryText,
 		strlen(queryText),
 		&error_offset,
@@ -413,8 +414,8 @@ static ScopeDeclaration AddEntry(TSNode node, TokenType tokenType, FileScope* fi
 
 Type* EvaluateNodeExpressionType(TSNode node, GapBuffer* buffer, const std::vector<Scope*>& scopeKing, FileScope* fileScope)
 {
-	static auto builtInTypeSymbol = ts_language_symbol_for_name(s_jaiLang, "built_in_type", strlen("built_in_type"), true);
-	static auto identifierSymbol = ts_language_symbol_for_name(s_jaiLang, "identifier", strlen("identifier"), true);
+	static auto builtInTypeSymbol = ts_language_symbol_for_name(g_jaiLang, "built_in_type", strlen("built_in_type"), true);
+	static auto identifierSymbol = ts_language_symbol_for_name(g_jaiLang, "identifier", strlen("identifier"), true);
 
 	auto symbol = ts_node_symbol(node);
 	auto hash = GetIdentifierHash(node, buffer);
@@ -490,7 +491,7 @@ static void BuildFileScope(Hash documentHash)
 	TSQueryError error_type;
 
 	auto query = ts_query_new(
-		s_jaiLang,
+		g_jaiLang,
 		queryText,
 		strlen(queryText),
 		&error_offset,
@@ -526,6 +527,7 @@ static void BuildFileScope(Hash documentHash)
 	std::vector<int> unresolvedTokenIndex;
 
 	bool skipNextIdentifier = false;
+	Type* currentType = nullptr;
 
 	while (ts_query_cursor_next_capture(queryCursor, &match, &index))
 	{
@@ -549,6 +551,11 @@ static void BuildFileScope(Hash documentHash)
 			}
 			parameters.clear();
 			
+			if(currentType)
+				currentType->members = localScope;
+
+			currentType = nullptr;
+
 			scopeKing.push_back(localScope);
 			break;
 		}
@@ -657,6 +664,7 @@ static void BuildFileScope(Hash documentHash)
 			skipNextIdentifier = true;
 			Type* type = new Type(); // leak this 
 			type->name = GetIdentifierFromBuffer(node, buffer).CopyMalloc(); // leak this too!
+			currentType = type;
 			AddEntry(node, TokenType::Type, fileScope, buffer, type);
 			break;
 		}
@@ -896,7 +904,7 @@ static void HandleImports(Hash documentHash)
 		;
 
 	auto var_decl_query = ts_query_new(
-		s_jaiLang,
+		g_jaiLang,
 		queryText,
 		strlen(queryText),
 		&error_offset,
@@ -943,7 +951,7 @@ export long long CreateTree(Hash documentHash, const char* code, int length)
 	}
 
 	TSParser* parser = ts_parser_new();
-	ts_parser_set_language(parser, s_jaiLang);
+	ts_parser_set_language(parser, g_jaiLang);
 
 	auto view = g_buffers[documentHash].GetEntireStringView();
 	auto tree = ts_parser_parse_string(parser, nullptr, view.data(), length);
@@ -1022,7 +1030,7 @@ export long long UpdateTree(Hash documentHash)
 	auto tree = g_trees[documentHash];
 
 	TSParser* parser = ts_parser_new();
-	ts_parser_set_language(parser, s_jaiLang);
+	ts_parser_set_language(parser, g_jaiLang);
 
 	TSInput input;
 	input.encoding = TSInputEncodingUTF8;

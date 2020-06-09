@@ -1,10 +1,12 @@
 #pragma once
 #include <unordered_map>
+#include <optional>
 #include <tree_sitter/api.h>
 #include "GapBuffer.h"
 
 #define export extern "C" __declspec(dllexport)
 extern "C" TSLanguage * tree_sitter_jai();
+extern TSLanguage* g_jaiLang;
 
 enum class TokenType
 {
@@ -53,6 +55,7 @@ struct SemanticToken
 };
 
 struct Type;
+struct Scope;
 
 struct Member
 {
@@ -63,7 +66,7 @@ struct Member
 struct Type
 {
 	const char* name;
-	std::unordered_map<Hash, Member> members;
+	Scope* members;
 };
 
 struct ScopeDeclaration
@@ -85,6 +88,14 @@ struct Scope
 	buffer_view content;
 #endif
 	
+	std::optional<ScopeDeclaration> TryGet(Hash hash)
+	{
+		auto it = entries.find(hash);
+		if (it == entries.end())
+			return std::nullopt;
+
+		return std::optional<ScopeDeclaration>(it->second);
+	}
 };
 
 struct ModuleScopeDeclaration
@@ -97,6 +108,7 @@ struct ModuleScopeDeclaration
 #if _DEBUG
 	std::string name;
 #endif
+
 };
 
 struct ModuleScope
@@ -106,6 +118,16 @@ struct ModuleScope
 #if _DEBUG
 	buffer_view content;
 #endif
+
+	std::optional<ModuleScopeDeclaration> TryGet(Hash hash)
+	{
+		auto it = entries.find(hash);
+		if (it == entries.end())
+			return std::nullopt;
+
+		return std::optional<ModuleScopeDeclaration>(it->second);
+	}
+
 
 };
 
