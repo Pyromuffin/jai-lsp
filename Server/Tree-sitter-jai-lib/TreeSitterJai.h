@@ -1,12 +1,26 @@
 #pragma once
 #include <unordered_map>
 #include <optional>
+#include <shared_mutex>
 #include <tree_sitter/api.h>
 #include "GapBuffer.h"
 
 #define export extern "C" __declspec(dllexport)
 extern "C" TSLanguage * tree_sitter_jai();
 extern TSLanguage* g_jaiLang;
+
+
+struct Constants
+{
+	 TSSymbol constDecl;
+	 TSSymbol import;
+	 TSSymbol varDecl;
+	 TSSymbol funcDecl;
+	 TSSymbol structDecl;
+	 TSSymbol memberAccess;
+};
+
+extern Constants g_constants;
 
 enum class TokenType
 {
@@ -139,13 +153,46 @@ struct FileScope
 	Scope file;
 };
 
-extern std::unordered_map<Hash, TSTree*> g_trees;
-extern std::unordered_map<Hash, GapBuffer> g_buffers;
-extern std::unordered_map<Hash, ModuleScope> g_modules;
-extern std::unordered_map<Hash, FileScope> g_fileScopes;
+
+template <typename T>
+struct ConcurrentDictionary
+{
+	std::shared_mutex mutex;
+	std::unordered_map<Hash, T> dict;
+
+	std::optional<T> Read(Hash key)
+	{
+		mutex.lock_shared();
+		auto it = dict.find(key);
+
+		if (it == dict.end())
+		{
+			mutex.unlock_shared();
+			return std::nullopt;
+		}
+
+		auto value = it->second;
+		mutex.unlock_shared();
+		return std::optional(value);
+	}
+
+	void Write(Hash key, T value)
+	{
+		mutex.lock();
+		dict[key] = value;
+		mutex.unlock();
+	}
+};
+
+
+extern ConcurrentDictionary<TSTree*> g_trees;
+extern ConcurrentDictionary<GapBuffer*> g_buffers;
+extern ConcurrentDictionary<ModuleScope*> g_modules;
+extern ConcurrentDictionary<FileScope*> g_fileScopes;
 
 std::string_view GetIdentifier(const TSNode& node, std::string_view code);
 Hash GetIdentifierHash(const TSNode& node, std::string_view code);
 Hash GetIdentifierHash(const TSNode& node, GapBuffer* buffer);
 Scope* GetScopeForNode(const TSNode& node, FileScope* scope);
 Scope* GetScopeAndParentForNode(const TSNode& node, FileScope* scope, TSNode* outParentNode);
+Type* GetTypeForNode(TSNode node, FileScope* fileScope, GapBuffer* buffer);

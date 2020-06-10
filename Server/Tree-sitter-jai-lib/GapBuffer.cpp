@@ -1,4 +1,6 @@
 #include "GapBuffer.h"
+#include <assert.h>
+#include <iostream>
 
 char GapBuffer::Advance()
 {

@@ -27,10 +27,10 @@ static Range NodeToRange(TSNode node)
 
 export void FindDefinition(Hash documentName, int row, int col, Hash* outFileHash, Range* outOriginRange, Range* outTargetRange, Range* outSelectionRange)
 {
-	auto tree = ts_tree_copy(g_trees[documentName]);
+	auto tree = ts_tree_copy(g_trees.Read(documentName).value());
 	auto root = ts_tree_root_node(tree);
-	auto buffer = &g_buffers[documentName];
-	auto fileScope = &g_fileScopes[documentName];
+	auto buffer = g_buffers.Read(documentName).value();;
+	auto fileScope = g_fileScopes.Read(documentName).value();
 
 	auto point = TSPoint{ static_cast<uint32_t>(row), static_cast<uint32_t>(col) };
 
@@ -68,7 +68,7 @@ export void FindDefinition(Hash documentName, int row, int col, Hash* outFileHas
 		for (int i = 0; i < fileScope->imports.size(); i++)
 		{
 			auto importHash = fileScope->imports[i];
-			auto moduleScope = &g_modules[importHash];
+			auto moduleScope = g_modules.Read(importHash).value();
 			if (moduleScope->entries.contains(identifierHash))
 			{
 				auto entry = moduleScope->entries[identifierHash];

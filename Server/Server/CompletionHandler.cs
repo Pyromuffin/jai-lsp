@@ -27,6 +27,7 @@ namespace jai_lsp
         {
             return new CompletionRegistrationOptions
             {
+                TriggerCharacters = new Container<string>("."),
                 DocumentSelector = _documentSelector,
                 ResolveProvider = false
             };
@@ -35,17 +36,19 @@ namespace jai_lsp
         public async Task<CompletionList> Handle(CompletionParams request, CancellationToken cancellationToken)
         {
             /*
-            //_router.Window.LogInfo("Received Completion Request!");
-       
-            var documentPath = request.TextDocument.Uri.ToString();
-            var text = _bufferManager.GetBuffer(documentPath);
-
-            if (text == null)
+            if(request.Context.TriggerKind != CompletionTriggerKind.TriggerCharacter)
             {
                 return new CompletionList();
             }
+            */
+
+            var documentHash = Hash.StringHash(request.TextDocument.Uri.GetFileSystemPath());
             var pos = request.Position;
-            var names = TreeSitter.CoolParse(text, pos.Line, pos.Character);
+            var namesPtr = TreeSitter.GetCompletionItems(documentHash, pos.Line, pos.Character);
+            var names = System.Runtime.InteropServices.Marshal.PtrToStringAnsi(namesPtr);
+            if (names == null)
+                return new CompletionList();
+
             var nameList = names.Split(",");
             List<CompletionItem> items = new List<CompletionItem>(nameList.Length);
             
@@ -57,8 +60,6 @@ namespace jai_lsp
             }
 
             return new CompletionList(items);
-            */
-            return new CompletionList();
         }
 
         public void SetCapability(CompletionCapability capability)

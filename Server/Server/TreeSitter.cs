@@ -40,15 +40,7 @@ namespace jai_lsp
         [DllImport(dllpath)]
         extern static public int Init();
         [DllImport(dllpath)]
-        extern static public IntPtr GetCompletionItems([MarshalAs(UnmanagedType.LPStr)] string code, int row, int col);
-
-
-        public static string CoolParse(string code, int row, int col)
-        {
-            var ptr = GetCompletionItems(code, row, col);
-            return Marshal.PtrToStringAnsi(ptr);
-        }
-
+        extern static public IntPtr GetCompletionItems(ulong documentHash, int row, int col);
 
         public static string GetSyntax(ulong documentHash)
         {

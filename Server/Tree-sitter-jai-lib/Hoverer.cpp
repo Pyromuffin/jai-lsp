@@ -1,12 +1,8 @@
 #include "TreeSitterJai.h"
-#include <optional>
-
 
 std::optional<ScopeDeclaration> GetDeclarationForNodeFromScope(TSNode node, FileScope* fileScope, GapBuffer* buffer, Scope* scope, TSNode parent)
 {
 	// search scopes going up for entries, if they're data scopes. if they're imperative scopes then declarations have to be in order.
-
-
 	auto identifierHash = GetIdentifierHash(node, buffer);
 	while (scope != nullptr)
 	{
@@ -42,8 +38,11 @@ std::optional<ScopeDeclaration> GetDeclarationForNodeFromScope(TSNode node, File
 		// search modules
 		for (auto moduleHash : fileScope->imports)
 		{
-			auto moduleScope = &g_modules[moduleHash];
-			if (auto moduleDecl = moduleScope->TryGet(identifierHash))
+			auto moduleScope = g_modules.Read(moduleHash);
+			if (!moduleScope)
+				continue;
+
+			if (auto moduleDecl = moduleScope.value()->TryGet(identifierHash))
 			{
 				ScopeDeclaration entry;
 				entry.name = moduleDecl.value().name;
@@ -70,15 +69,13 @@ std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fi
 
 Type* EvaluateMemberAccess(TSNode node, FileScope* fileScope, GapBuffer* buffer)
 {
-	TSSymbol memberAccess = ts_language_symbol_for_name(g_jaiLang, "member_access", strlen("member_access"), true);
-
 	// rhs should always be an identifier ?
 	
 	auto lhs = ts_node_named_child(node, 0);
 	auto lhsSymbol = ts_node_symbol(lhs);
 	Type* lhsType = nullptr;
 
-	if (lhsSymbol == memberAccess)
+	if (lhsSymbol == g_constants.memberAccess)
 	{
 		lhsType = EvaluateMemberAccess(lhs, fileScope, buffer);
 	}
@@ -118,16 +115,11 @@ Type* GetTypeForNode(TSNode node, FileScope* fileScope, GapBuffer* buffer)
 
 	*/
 
-
-	TSSymbol memberAccess = ts_language_symbol_for_name(g_jaiLang, "member_access", strlen("member_access"), true);
-	//TSSymbol memberAccess = ts_language_symbol_for_name(g_jaiLang, "identifier", strlen("identifier"), true);
-
-
 	// if this is an identifier, then go up until we find either a scope or a member access.
 	// if this is a member access, then get the type of the RHS, which will require getting the type of the LHS.
 
 	auto nodeSymbol = ts_node_symbol(node);
-	if (nodeSymbol == memberAccess)
+	if (nodeSymbol == g_constants.memberAccess)
 	{
 		return EvaluateMemberAccess(node, fileScope, buffer);
 	}
@@ -149,7 +141,7 @@ Type* GetTypeForNode(TSNode node, FileScope* fileScope, GapBuffer* buffer)
 		if (!terminalLHS)
 		{
 			auto parentSymbol = ts_node_symbol(parent);
-			if (parentSymbol == memberAccess)
+			if (parentSymbol == g_constants.memberAccess)
 			{
 				auto lhs = ts_node_named_child(parent, 0);
 				if (lhs.id == node.id)
@@ -183,10 +175,10 @@ Type* GetTypeForNode(TSNode node, FileScope* fileScope, GapBuffer* buffer)
 
 export const char* Hover(Hash documentName, int row, int col)
 {
-	auto tree = ts_tree_copy(g_trees[documentName]);
+	auto tree = ts_tree_copy(g_trees.Read(documentName).value());
 	auto root = ts_tree_root_node(tree);
-	auto buffer = &g_buffers[documentName];
-	auto fileScope = &g_fileScopes[documentName];
+	auto buffer = g_buffers.Read(documentName).value();
+	auto fileScope = g_fileScopes.Read(documentName).value();
 
 	auto point = TSPoint{ static_cast<uint32_t>(row), static_cast<uint32_t>(col) };
 	auto node = ts_node_named_descendant_for_point_range(root, point, point);

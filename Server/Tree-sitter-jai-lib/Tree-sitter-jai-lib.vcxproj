@@ -175,6 +175,7 @@
     <ClInclude Include="TreeSitterJai.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Completer.cpp" />
     <ClCompile Include="DefinitionFinder.cpp" />
     <ClCompile Include="GapBuffer.cpp" />
     <ClCompile Include="Hoverer.cpp" />

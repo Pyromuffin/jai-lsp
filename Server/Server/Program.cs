@@ -12,6 +12,7 @@ using System.Reflection;
 using System.Linq;
 using System.Reactive.PlatformServices;
 using System.Reactive;
+using System.Collections.Generic;
 
 namespace jai_lsp
 {
@@ -166,7 +167,9 @@ namespace jai_lsp
                             var moduleDirectories = Directory.EnumerateDirectories(path);
                             var count = moduleDirectories.Count();
                             int current = 0;
-                            foreach(var moduleDirectory in moduleDirectories)
+                            List<Task> tasks = new List<Task>();
+
+                            foreach (var moduleDirectory in moduleDirectories)
                             {
                                 var moduleFilePath = Path.Combine(moduleDirectory, "module.jai");
 
@@ -174,13 +177,18 @@ namespace jai_lsp
                                 var separatorIndex = moduleDirectory.LastIndexOf(Path.DirectorySeparatorChar);
                                 var moduleName = moduleDirectory.Substring(separatorIndex + 1);
                                 var exists = File.Exists(moduleFilePath);
+
                                 if(exists)
                                 {
                                     manager.OnNext(new WorkDoneProgressReport() { Message = moduleFilePath, Percentage = (double)current / count });
-                                    TreeSitter.CreateTreeFromPath(moduleFilePath, moduleName);
+                                    var task = Task.Run(() => TreeSitter.CreateTreeFromPath(moduleFilePath, moduleName));
+                                    tasks.Add(task);
                                     current++;
                                 }
+
                             }
+
+                            await Task.WhenAll(tasks);
                         }
 
                         manager.OnCompleted();

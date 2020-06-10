@@ -1,9 +1,7 @@
 #pragma once
 #include <vector>
-#include <iostream>
 #include <tree_sitter/api.h>
-#include <assert.h>
-#include <compare>
+#include <string_view>
 
 
 struct Hash

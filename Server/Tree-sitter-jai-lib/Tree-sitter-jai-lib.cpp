@@ -8,24 +8,21 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <shared_mutex>
 
 #include "Timer.h"
 #include "TreeSitterJai.h"
 
 
-std::unordered_map<Hash, bool> g_dirty;
-std::unordered_map<Hash, TSTree*> g_trees;
-std::unordered_map<Hash, GapBuffer> g_buffers;
-std::unordered_map<Hash, ModuleScope> g_modules;
-std::unordered_map<Hash, FileScope> g_fileScopes;
+
+
+ConcurrentDictionary<TSTree*> g_trees;
+ConcurrentDictionary<GapBuffer*> g_buffers;
+ConcurrentDictionary<ModuleScope*> g_modules;
+ConcurrentDictionary<FileScope*> g_fileScopes;
+
 TSLanguage* g_jaiLang;
-
-
-static TSSymbol s_constDecl;
-static TSSymbol s_import;
-static TSSymbol s_varDecl;
-static TSSymbol s_funcDecl;
-static TSSymbol s_structDecl;
+Constants g_constants;
 
 static char names[1000];
 export long long UpdateTree(Hash documentHash);
@@ -56,12 +53,15 @@ static void SetupBuiltInTypes()
 export int Init()
 {
 	g_jaiLang = tree_sitter_jai();
-	s_constDecl = ts_language_symbol_for_name(g_jaiLang, "constant_definition", strlen("constant_definition"), true);
-	s_varDecl = ts_language_symbol_for_name(g_jaiLang, "named_decl", strlen("named_decl"), true);
-	s_funcDecl = ts_language_symbol_for_name(g_jaiLang, "named_block_decl", strlen("named_block_decl"), true);
-	s_structDecl = ts_language_symbol_for_name(g_jaiLang, "struct_definition", strlen("struct_definition"), true);
-	s_import = ts_language_symbol_for_name(g_jaiLang, "import_statement", strlen("import_statement"), true);
-	s_structDecl = ts_language_symbol_for_name(g_jaiLang, "struct_definition", strlen("struct_definition"), true);
+
+	g_constants.constDecl = ts_language_symbol_for_name(g_jaiLang, "constant_definition", strlen("constant_definition"), true);
+	g_constants.varDecl = ts_language_symbol_for_name(g_jaiLang, "named_decl", strlen("named_decl"), true);
+	g_constants.funcDecl = ts_language_symbol_for_name(g_jaiLang, "named_block_decl", strlen("named_block_decl"), true);
+	g_constants.structDecl = ts_language_symbol_for_name(g_jaiLang, "struct_definition", strlen("struct_definition"), true);
+	g_constants.import = ts_language_symbol_for_name(g_jaiLang, "import_statement", strlen("import_statement"), true);
+	g_constants.structDecl = ts_language_symbol_for_name(g_jaiLang, "struct_definition", strlen("struct_definition"), true);
+	g_constants.memberAccess = ts_language_symbol_for_name(g_jaiLang, "member_access", strlen("member_access"), true);
+
 	SetupBuiltInTypes();
 	return 69420;
 }
@@ -134,16 +134,16 @@ TokenType GetTokenTypeForNode(const TSNode& node)
 {
 	auto symbol = ts_node_symbol(node);
 
-	if (symbol == s_constDecl)
+	if (symbol == g_constants.constDecl)
 		return TokenType::EnumMember;
 		
-	if (symbol == s_varDecl)
+	if (symbol == g_constants.varDecl)
 		return TokenType::Variable;
 
-	if (symbol == s_funcDecl)
+	if (symbol == g_constants.funcDecl)
 		return TokenType::Function;
 
-	if (symbol == s_structDecl)
+	if (symbol == g_constants.structDecl)
 		return TokenType::Struct;
 
 	return TokenType::Comment;
@@ -217,11 +217,25 @@ Scope* GetScopeForNodeDebug(const TSNode& node, FileScope* scope, GapBuffer* gb)
 
 static std::vector<std::string_view> BuildModuleScope(Hash document, const char* moduleName)
 {
-	auto tree = ts_tree_copy(g_trees[document]);
+	auto tree = ts_tree_copy(g_trees.Read(document).value());
 	auto root = ts_tree_root_node(tree);
-	auto buffer = &g_buffers[document];
+	auto buffer = g_buffers.Read(document).value();
+	auto moduleHash = StringHash(moduleName);
 
-	ModuleScope& scope = g_modules[StringHash(moduleName)];
+	auto scopeOpt = g_modules.Read(moduleHash);
+	ModuleScope* scope;
+
+	if (!scopeOpt)
+	{
+		scope = new ModuleScope();
+		g_modules.Write(moduleHash, scope);
+	}
+	else
+	{
+		scope = scopeOpt.value();
+	}
+
+	
 	std::vector<std::string_view> loads;
 
 	auto queryText =
@@ -281,7 +295,7 @@ static std::vector<std::string_view> BuildModuleScope(Hash document, const char*
 #if _DEBUG
 			entry.name = GetIdentifierFromBufferCopy(node, buffer);
 #endif
-			scope.entries[GetIdentifierHash(node, code)] = entry;
+			scope->entries[GetIdentifierHash(node, code)] = entry;
 			break;
 		}
 		case Capture::exportDirective:
@@ -314,7 +328,7 @@ static std::vector<std::string_view> BuildModuleScope(Hash document, const char*
 			type->name = GetIdentifierFromBuffer(headerNode, buffer).CopyMalloc();
 			entry.type = type;
 
-			scope.entries[GetIdentifierHash(node, code)] = entry;
+			scope->entries[GetIdentifierHash(node, code)] = entry;
 			break;
 		}
 		case Capture::struct_defn:
@@ -334,7 +348,7 @@ static std::vector<std::string_view> BuildModuleScope(Hash document, const char*
 #if _DEBUG
 			entry.name = GetIdentifierFromBufferCopy(node, buffer);
 #endif
-			scope.entries[GetIdentifierHash(node, code)] = entry;
+			scope->entries[GetIdentifierHash(node, code)] = entry;
 			break;
 		}
 		case Capture::loadDirective:
@@ -350,7 +364,7 @@ static std::vector<std::string_view> BuildModuleScope(Hash document, const char*
 		}
 	}
 
-	ts_tree_delete(tree);
+	// ts_tree_delete(tree);
 	ts_query_delete(query);
 	ts_query_cursor_delete(queryCursor);
 
@@ -440,10 +454,10 @@ Type* EvaluateNodeExpressionType(TSNode node, GapBuffer* buffer, const std::vect
 		// search modules
 		for (auto moduleHash : fileScope->imports)
 		{
-			auto moduleScope = &g_modules[moduleHash];
-			if (moduleScope->entries.contains(hash))
+			auto moduleScope = g_modules.Read(moduleHash);
+			if (moduleScope && moduleScope.value()->entries.contains(hash))
 			{
-				return moduleScope->entries[hash].type;
+				return moduleScope.value()->entries[hash].type;
 			}
 		}
 	}
@@ -455,18 +469,17 @@ Type* EvaluateNodeExpressionType(TSNode node, GapBuffer* buffer, const std::vect
 
 static void BuildFileScope(Hash documentHash)
 {
-	// ideally we do this breadth first per scope, but that seems like a bit of a hassle at the moment. 
-	// because of this, it will fail to properly highlight elements in data scopes that are out of order, and are also not file scope. 
+	FileScope* fileScope = new FileScope();
+	g_fileScopes.Write(documentHash, fileScope);
 
-	FileScope* fileScope = &g_fileScopes[documentHash];
 	fileScope->imports.clear();
 	fileScope->scopes.clear();
 	fileScope->tokens.clear();
 	fileScope->file.entries.clear();
 
-	auto buffer = &g_buffers[documentHash];
+	auto buffer = g_buffers.Read(documentHash).value();
 
-	auto tree = ts_tree_copy(g_trees[documentHash]);
+	auto tree = ts_tree_copy(g_trees.Read(documentHash).value());
 	auto root = ts_tree_root_node(tree);
 	
 
@@ -597,7 +610,7 @@ static void BuildFileScope(Hash documentHash)
 				while (ts_tree_cursor_goto_next_sibling(&cursor))
 				{
 					auto current = ts_tree_cursor_current_node(&cursor);
-					if (ts_node_symbol(current) == s_import)
+					if (ts_node_symbol(current) == g_constants.import)
 					{
 						auto nameNode = ts_node_named_child(current, 0);
 						auto startOffset = ts_node_start_byte(nameNode) + 1;
@@ -724,10 +737,10 @@ static void BuildFileScope(Hash documentHash)
 				// search modules
 				for (auto moduleHash : fileScope->imports)
 				{
-					auto moduleScope = &g_modules[moduleHash];
-					if( moduleScope->entries.contains(hash) )
+					auto moduleScope = g_modules.Read(moduleHash);
+					if(moduleScope && moduleScope.value()->entries.contains(hash) )
 					{
-						token.type = moduleScope->entries[hash].tokenType;
+						token.type = moduleScope.value()->entries[hash].tokenType;
 						goto done;
 					}
 				}
@@ -824,10 +837,10 @@ static void BuildFileScope(Hash documentHash)
 			bool found = false;
 			for (auto moduleHash : fileScope->imports)
 			{
-				auto moduleScope = &g_modules[moduleHash];
-				if (moduleScope->entries.contains(identifierHash))
+				auto moduleScope = g_modules.Read(moduleHash);
+				if (moduleScope && moduleScope.value()->entries.contains(identifierHash))
 				{
-					auto entry = moduleScope->entries[identifierHash];
+					auto entry = moduleScope.value()->entries[identifierHash];
 					fileScope->tokens[index].type = entry.tokenType;
 					found = true;
 					break;
@@ -850,7 +863,7 @@ static void BuildFileScope(Hash documentHash)
 
 export const char* GetSyntaxNice(Hash document)
 {
-	auto tree = g_trees[document];
+	auto tree = g_trees.Read(document).value();
 	auto root = ts_tree_root_node(tree);
 
 	return ts_node_string(root);
@@ -860,7 +873,7 @@ export const char* GetSyntaxNice(Hash document)
 
 export const char* GetSyntax(const Hash& document)
 {
-	auto tree = g_trees[document];
+	auto tree = g_trees.Read(document).value();
 	auto root = ts_tree_root_node(tree);
 
 	return ts_node_string(root);
@@ -869,98 +882,57 @@ export const char* GetSyntax(const Hash& document)
 
 export GapBuffer* GetGapBuffer(Hash document)
 {
-	return &g_buffers[document];
+	return g_buffers.Read(document).value();
 }
 
 export long long EditTree(Hash documentHash, const char* change, int startLine, int startCol, int endLine, int endCol, int contentLength, int rangeLength)
 {
 	auto timer = Timer("");
 
-	assert(g_trees.contains(documentHash));
-	assert(g_buffers.contains(documentHash));
-
-	auto buffer = &g_buffers[documentHash];
+	auto buffer = g_buffers.Read(documentHash).value();
 	auto edit = buffer->Edit(startLine, startCol, endLine, endCol, change, contentLength, rangeLength);
-	auto tree = g_trees[documentHash];
+	auto tree = g_trees.Read(documentHash).value();
 	ts_tree_edit(tree, &edit);
-	g_trees[documentHash] = tree;
-	g_dirty[documentHash] = true;
+	g_trees.Write(documentHash, tree);
 
 	return timer.GetMicroseconds();
-}
-
-
-static void HandleImports(Hash documentHash)
-{
-	auto buffer = &g_buffers[documentHash];
-	auto tree = ts_tree_copy(g_trees[documentHash]);
-	auto root = ts_tree_root_node(tree);
-
-	uint32_t error_offset;
-	TSQueryError error_type;
-	auto queryText =
-		"(import_directive name: (string_literal) @import)"
-		//"(load_statement name: (string_literal) @load)"
-		;
-
-	auto var_decl_query = ts_query_new(
-		g_jaiLang,
-		queryText,
-		strlen(queryText),
-		&error_offset,
-		&error_type
-	);
-
-	TSQueryCursor* queryCursor = ts_query_cursor_new();
-	ts_query_cursor_exec(queryCursor, var_decl_query, root);
-
-	TSQueryMatch match;
-	uint32_t index;
-	int cursor = 0;
-	
-	auto scope = &g_fileScopes[documentHash];
-	scope->imports.clear();
-
-	while (ts_query_cursor_next_capture(queryCursor, &match, &index))
-	{
-		auto node = match.captures[index].node;
-		auto captureIndex = match.captures[index].index;
-
-		// elide the quotation marks
-		auto startOffset = ts_node_start_byte(node) + 1;
-		auto endOffset = ts_node_end_byte(node) - 1;
-		buffer_view view = buffer_view(startOffset, endOffset, buffer);
-
-		auto moduleNameHash = StringHash(view);
-		scope->imports.push_back(moduleNameHash);
-	}
-	
-	ts_query_cursor_delete(queryCursor);
-	ts_query_delete(var_decl_query);
 }
 
 
 export long long CreateTree(Hash documentHash, const char* code, int length)
 {
 	auto timer = Timer("");
-	g_buffers[documentHash] = GapBuffer(code, length);
+	
+	auto bufferOpt = g_buffers.Read(documentHash);
+	GapBuffer* buffer;
 
-	if (g_trees.contains(documentHash))
+	if (bufferOpt)
 	{
-		ts_tree_delete(g_trees[documentHash]);
+		buffer = bufferOpt.value();
+		*buffer = GapBuffer(code, length);
+	}
+	else
+	{
+		buffer = new GapBuffer(code, length);
+		g_buffers.Write(documentHash, buffer);
+	}
+
+	auto treeOpt = g_trees.Read(documentHash);
+
+	if (treeOpt)
+	{
+		ts_tree_delete(treeOpt.value());;
 	}
 
 	TSParser* parser = ts_parser_new();
 	ts_parser_set_language(parser, g_jaiLang);
 
-	auto view = g_buffers[documentHash].GetEntireStringView();
+	auto view = buffer->GetEntireStringView();
 	auto tree = ts_parser_parse_string(parser, nullptr, view.data(), length);
 
-	g_trees[documentHash] = tree;
-	g_dirty[documentHash] = false;
+	g_trees.Write(documentHash, tree);
 
 	ts_parser_delete(parser);
-
 
 	BuildFileScope(documentHash);
 
@@ -1020,14 +992,8 @@ export long long UpdateTree(Hash documentHash)
 {
 	auto timer = Timer("");
 
-	assert(g_trees.contains(documentHash));
-	assert(g_buffers.contains(documentHash));
-
-	if (!g_dirty[documentHash])
-		return 0;
-
-	auto buffer = &g_buffers[documentHash];
-	auto tree = g_trees[documentHash];
+	auto buffer = g_buffers.Read(documentHash).value();;
+	auto tree = g_trees.Read(documentHash).value();
 
 	TSParser* parser = ts_parser_new();
 	ts_parser_set_language(parser, g_jaiLang);
@@ -1050,109 +1016,24 @@ export long long UpdateTree(Hash documentHash)
 		input);
 	*/
 
-	g_trees[documentHash] = editedTree;
+	g_trees.Write(documentHash, editedTree);
 
 	ts_parser_delete(parser);
 	ts_tree_delete(tree);
 
 	BuildFileScope(documentHash);
 
-	g_dirty[documentHash] = false;
-
 	return timer.GetMicroseconds();
 }
 
-export const char* GetCompletionItems(const char* code, int row, int col)
-{
-	/*
-	TSParser* parser = ts_parser_new();
-	auto jaiLang = tree_sitter_jai();
-
-	ts_parser_set_language(parser, tree_sitter_jai());
-
-	auto tree = ts_parser_parse_string(
-		parser,
-		NULL,
-		code,
-		strlen(code));
-	TSNode root_node = ts_tree_root_node(tree);
-
-	auto scopeMap = BuildUpScopes(root_node, jaiLang, code);
-	auto fileScope = GetScopeForNode(root_node, scopeMap);
-
-	TSPoint start;
-	start.column = col;
-	start.row = row;
-	auto end = start;
-
-	const auto& currentNode = ts_node_named_descendant_for_point_range(root_node, start, end);
-	Scope* scope;
-	
-	if (scopeMap.contains(currentNode.id))
-	{
-		scope = &scopeMap[currentNode.id];
-	}
-	else
-	{
-		scope = GetScopeForNode(currentNode, scopeMap);
-	}
-	
-	int cursor = 0;
-	while (scope != nullptr)
-	{
-		for (auto& entry : scope->entries)
-		{
-			if (entry.position.row < row || (entry.position.row == row && entry.position.column < col) || scope == fileScope)
-			{
-				strncpy_s(&names[cursor], sizeof(names) - cursor, entry.name.data(), entry.name.length());
-				cursor += entry.name.length();
-				names[cursor] = ',';
-				cursor++;
-			}
-		}
-		scope = GetScopeForNode(scope->node, scopeMap);
-	}
-
-	cursor--;
-	if (cursor < 0) cursor = 0;
-	names[cursor] = '\0';
-	
-	ts_tree_delete(tree);
-	ts_parser_delete(parser);
-		
-	return names;
-	*/
-	return nullptr;
-}
 
 
 export long long GetTokens(Hash documentHash, SemanticToken** outTokens, int* count)
 {
 	auto t = Timer("");
-	auto fileScope = &g_fileScopes[documentHash];
+	auto fileScope = g_fileScopes.Read(documentHash).value();
 	*outTokens = fileScope->tokens.data();
 	*count = fileScope->tokens.size();
 
 	return t.GetMicroseconds();
-	/*
-	assert(g_trees.contains(documentHash));
-	assert(g_buffers.contains(documentHash));
-
-	s_tokens.clear();
-
-	auto totalTimer = Timer("total time");
-
-	auto tree = ts_tree_copy(g_trees[documentHash]);
-	auto buffer = &g_buffers[documentHash];
-	
-	TSNode root_node = ts_tree_root_node(tree);
-
-	AddVaraibleReferenceTokens(fileScope, root_node, buffer, s_tokens);
-
-	*outTokens = s_tokens.data();
-	*count = s_tokens.size();
-
-	ts_tree_delete(tree);
-	return totalTimer.GetMicroseconds();
-	*/
 }
