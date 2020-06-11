@@ -41,42 +41,109 @@ export void FindDefinition(Hash documentName, int row, int col, Hash* outFileHas
 
 	*outOriginRange = NodeToRange(identifierNode);
 
-	if (scope != nullptr && scope->entries.contains(identifierHash))
+	if (scope != nullptr && scope->declarations.contains(identifierHash))
 	{
-		auto entry = scope->entries[identifierHash];
+		auto entry = scope->declarations[identifierHash];
 		*outFileHash = documentName;
 		*outTargetRange = NodeToRange(parent);
-		*outSelectionRange = NodeToRange(entry.definitionNode);
+
+		// wow this is dumb but we're going to query the tree to get the node for the declaration offset! hope that offset isn't stale!
+		auto definitionNode = ts_node_named_descendant_for_byte_range(root, entry.startByte, entry.startByte + entry.length);
+		*outSelectionRange = NodeToRange(definitionNode);
 		ts_tree_delete(tree);
 		return;
 	}
 	else
 	{
 		// search file scope
-		if (fileScope->file.entries.contains(identifierHash))
+		if (auto decl = fileScope->file.TryGet(identifierHash))
 		{
-			auto entry = fileScope->file.entries[identifierHash];
+			auto entry = decl.value();
 			*outFileHash = documentName;
-			*outTargetRange = NodeToRange(entry.definitionNode);
-			*outSelectionRange = NodeToRange(entry.definitionNode);
+			auto definitionNode = ts_node_named_descendant_for_byte_range(root, entry.startByte, entry.startByte + entry.length);
+			*outTargetRange = NodeToRange(definitionNode);
+			*outSelectionRange = NodeToRange(definitionNode);
 			ts_tree_delete(tree);
 			return;
 		}
 
 
-		// search modules
+		for (auto load : fileScope->loads)
+		{
+			if (auto loadedScope = g_fileScopes.Read(load))
+			{
+				if (auto decl = loadedScope.value()->file.TryGet(identifierHash))
+				{
+					if (!(decl.value().flags & DeclarationFlags::Exported))
+						continue;
+
+					auto entry = decl.value();
+					*outFileHash = load;
+
+					auto loadedTree = ts_tree_copy(g_trees.Read(load).value());
+					auto loadedRoot = ts_tree_root_node(loadedTree);
+					auto definitionNode = ts_node_named_descendant_for_byte_range(loadedRoot, entry.startByte, entry.startByte + entry.length);
+					*outTargetRange = NodeToRange(definitionNode);
+					*outSelectionRange = NodeToRange(definitionNode);
+
+					ts_tree_delete(loadedTree);
+					ts_tree_delete(tree);
+					return;
+				}
+			}
+		}
+
+		// search modules the slooow way.
+		// this doesnt work for multiple layers of loads btw.
 		for (int i = 0; i < fileScope->imports.size(); i++)
 		{
 			auto importHash = fileScope->imports[i];
 			auto moduleScope = g_modules.Read(importHash).value();
-			if (moduleScope->entries.contains(identifierHash))
+
+			if (auto decl = moduleScope->moduleFile->file.TryGet(identifierHash))
 			{
-				auto entry = moduleScope->entries[identifierHash];
-				*outFileHash = entry.definingFile;
-				*outTargetRange = NodeToRange(entry.definitionNode);
-				*outSelectionRange = NodeToRange(entry.definitionNode);
+				auto entry = decl.value();
+				if (!(entry.flags & DeclarationFlags::Exported))
+					continue;
+
+				auto loadedTree = ts_tree_copy(g_trees.Read(moduleScope->moduleFileHash).value());
+				auto loadedRoot = ts_tree_root_node(loadedTree);
+
+				*outFileHash = moduleScope->moduleFileHash;
+				auto definitionNode = ts_node_named_descendant_for_byte_range(loadedRoot, entry.startByte, entry.startByte);
+				*outTargetRange = NodeToRange(definitionNode);
+				*outSelectionRange = NodeToRange(definitionNode);
+
 				ts_tree_delete(tree);
+				ts_tree_delete(loadedTree);
 				return;
+			}
+
+
+
+			for (auto load : moduleScope->moduleFile->loads)
+			{
+				if (auto loadedScope = g_fileScopes.Read(load))
+				{
+					if (auto decl = loadedScope.value()->file.TryGet(identifierHash))
+					{
+						auto entry = decl.value();
+						if (!(entry.flags & DeclarationFlags::Exported))
+							continue;
+
+						auto loadedTree = ts_tree_copy(g_trees.Read(load).value());
+						auto loadedRoot = ts_tree_root_node(loadedTree);
+
+						*outFileHash = load;
+						auto definitionNode = ts_node_named_descendant_for_byte_range(loadedRoot, entry.startByte, entry.startByte);
+						*outTargetRange = NodeToRange(definitionNode);
+						*outSelectionRange = NodeToRange(definitionNode);
+						
+						ts_tree_delete(tree);
+						ts_tree_delete(loadedTree);
+						return;
+					}
+				}
 			}
 		}
 	}

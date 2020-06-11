@@ -54,7 +54,7 @@ namespace jai_lsp
             var hash = Hash.StringHash(path);
             hashNamer.hashToName[hash] = path;
 
-            TreeSitter.CreateTree(hash, notification.TextDocument.Text, notification.TextDocument.Text.Length);
+            TreeSitter.CreateTree(path, notification.TextDocument.Text, notification.TextDocument.Text.Length);
             return Unit.Task;
         }
 

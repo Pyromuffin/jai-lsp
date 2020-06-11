@@ -17,7 +17,7 @@ using System.Threading.Tasks;
 
 namespace jai_lsp
 {
-    public enum TokenType
+    public enum TokenType : byte
     {
         Documentation,
 	    Comment,
@@ -43,7 +43,7 @@ namespace jai_lsp
         EnumMember,
     }
 
-    public enum TokenModifier
+    public enum TokenModifier : byte
     {
         Documentation,
 	    Declaration,

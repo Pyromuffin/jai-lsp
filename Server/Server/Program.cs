@@ -19,26 +19,7 @@ namespace jai_lsp
     class Program
     {
 
-        /*
-        static async Task Main(string[] args)
-        {
-            TreeSitter.Init();
-
-            var server = await LanguageServer.From(options =>
-                options
-                    .WithInput(Console.OpenStandardInput())
-                    .WithOutput(Console.OpenStandardOutput())
-                    .WithLoggerFactory(new LoggerFactory())
-                    .AddDefaultLoggingProvider()
-                    .WithMinimumLogLevel(LogLevel.Trace)
-                    .WithServices(ConfigureServices)
-                    .WithHandler<TextDocumentSyncHandler>()
-                    .WithHandler<CompletionHandler>()
-                );
-
-            await server.WaitForExit;
-        }
-        */
+     
         static void Main(string[] args)
         {
             MainAsync(args).Wait();
@@ -146,6 +127,7 @@ namespace jai_lsp
                         manager.OnNext(new WorkDoneProgressReport() { Message = "doing things... 56789" });
 
                         */
+
                         using var manager = languageServer.ProgressManager.Create(new WorkDoneProgressBegin() { Title = "Parsing Modules", Percentage = 0, Cancellable = true });
                         var logger = languageServer.Services.GetService<ILogger<Logjam>>();
                         var namer = languageServer.Services.GetService<HashNamer>();

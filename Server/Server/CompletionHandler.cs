@@ -35,16 +35,9 @@ namespace jai_lsp
 
         public async Task<CompletionList> Handle(CompletionParams request, CancellationToken cancellationToken)
         {
-            /*
-            if(request.Context.TriggerKind != CompletionTriggerKind.TriggerCharacter)
-            {
-                return new CompletionList();
-            }
-            */
-
             var documentHash = Hash.StringHash(request.TextDocument.Uri.GetFileSystemPath());
             var pos = request.Position;
-            var namesPtr = TreeSitter.GetCompletionItems(documentHash, pos.Line, pos.Character);
+            var namesPtr = TreeSitter.GetCompletionItems(documentHash, pos.Line, pos.Character, (int)request.Context.TriggerKind);
             var names = System.Runtime.InteropServices.Marshal.PtrToStringAnsi(namesPtr);
             if (names == null)
                 return new CompletionList();

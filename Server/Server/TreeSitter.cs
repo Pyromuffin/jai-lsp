@@ -40,7 +40,7 @@ namespace jai_lsp
         [DllImport(dllpath)]
         extern static public int Init();
         [DllImport(dllpath)]
-        extern static public IntPtr GetCompletionItems(ulong documentHash, int row, int col);
+        extern static public IntPtr GetCompletionItems(ulong documentHash, int row, int col, int InvocationType);
 
         public static string GetSyntax(ulong documentHash)
         {
@@ -52,7 +52,7 @@ namespace jai_lsp
         extern static public long CreateTreeFromPath([MarshalAs(UnmanagedType.LPStr)] string document, [MarshalAs(UnmanagedType.LPStr)] string moduleName);
 
         [DllImport(dllpath)]
-        extern static public long CreateTree(ulong documentHash, [MarshalAs(UnmanagedType.LPStr)] string code, int length);
+        extern static public long CreateTree([MarshalAs(UnmanagedType.LPStr)] string document, [MarshalAs(UnmanagedType.LPStr)] string code, int length);
 
         [DllImport(dllpath)]
         extern static public long UpdateTree(ulong documentHash);

@@ -11,8 +11,7 @@ std::optional<ScopeDeclaration> GetDeclarationForNodeFromScope(TSNode node, File
 			// if the scope is imperative, then respect ordering, if it is not, just get the decl.
 			if (scope->imperative)
 			{
-				auto definition = scope->entries[identifierHash].definitionNode;
-				auto definitionStart = ts_node_start_byte(definition);
+				auto definitionStart = decl.value().startByte;
 				auto identifierStart = ts_node_start_byte(node);
 				if (identifierStart >= definitionStart)
 				{
@@ -28,34 +27,7 @@ std::optional<ScopeDeclaration> GetDeclarationForNodeFromScope(TSNode node, File
 		scope = GetScopeAndParentForNode(parent, fileScope, &parent); // aliasing???
 	}
 
-
-	if (auto decl = fileScope->file.TryGet(identifierHash))
-	{
-		return decl;
-	}
-	else
-	{
-		// search modules
-		for (auto moduleHash : fileScope->imports)
-		{
-			auto moduleScope = g_modules.Read(moduleHash);
-			if (!moduleScope)
-				continue;
-
-			if (auto moduleDecl = moduleScope.value()->TryGet(identifierHash))
-			{
-				ScopeDeclaration entry;
-				entry.name = moduleDecl.value().name;
-				entry.definitionNode = moduleDecl.value().definitionNode;
-				entry.tokenType = moduleDecl.value().tokenType;
-				entry.type = moduleDecl.value().type;
-
-				return entry;
-			}
-		}
-	}
-
-	return std::nullopt;
+	return fileScope->Search(identifierHash);
 }
 
 

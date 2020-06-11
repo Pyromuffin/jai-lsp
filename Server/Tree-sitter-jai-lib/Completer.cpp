@@ -1,8 +1,15 @@
 #include "TreeSitterJai.h"
 
 
+enum InvocationType
+{
+	Invoked = 1,
+	TriggerCharacter = 2,
+	TriggerForIncompleteCompletions = 3
+};
 
-export const char* GetCompletionItems(Hash documentHash, int row, int col)
+
+export const char* GetCompletionItems(Hash documentHash, int row, int col, InvocationType invocation)
 {
 	static std::string str;
 	str.clear();
@@ -12,7 +19,13 @@ export const char* GetCompletionItems(Hash documentHash, int row, int col)
 	auto buffer = g_buffers.Read(documentHash).value();
 	auto fileScope = g_fileScopes.Read(documentHash).value();
 
-	auto point = TSPoint{ static_cast<uint32_t>(row), static_cast<uint32_t>(col - 1) }; // be careful not to underflow!
+	
+	auto point = TSPoint{ static_cast<uint32_t>(row), static_cast<uint32_t>(col) };
+	if (invocation == TriggerCharacter)
+		point.column--; // this is so that we try to get the node behind the "."
+						// ideally we would skip whitespace and try to find the "nearest" node.
+						// also underflow may be possible ?? maybe ???
+
 	auto node = ts_node_named_descendant_for_point_range(root, point, point);
 	
 	if (ts_node_has_error(node))
@@ -22,19 +35,115 @@ export const char* GetCompletionItems(Hash documentHash, int row, int col)
 			node = child;
 	}
 
+	if (fileScope->scopes.contains(node.id))
+	{
+		// we've invoked this on some empty space in a scope, so lets just print out whatever is in scope up to this point.
+		auto scope = &fileScope->scopes[node.id];
+		scope->AppendMembers(str, buffer);
+
+		TSNode scopeScopeParent;
+		auto scopeScope = GetScopeAndParentForNode(node, fileScope, &scopeScopeParent);
+		while (scopeScope)
+		{
+			scopeScope->AppendMembers(str, buffer);
+			scopeScope = GetScopeAndParentForNode(scopeScopeParent, fileScope, &scopeScopeParent);
+		}
+
+		// and append whatever is in file scope for good measure:
+		fileScope->file.AppendMembers(str, buffer);
+
+		// and append loads
+		for (auto load : fileScope->loads)
+		{
+			if (auto loadedScope = g_fileScopes.Read(load))
+			{
+				auto loadedBuffer = g_buffers.Read(load).value();
+				loadedScope.value()->file.AppendExportedMembers(str, loadedBuffer);
+			}
+		}
+
+		// and finally append imports.
+		for (auto import : fileScope->imports)
+		{
+			if (auto mod = g_modules.Read(import))
+			{
+				auto moduleFile = mod.value()->moduleFile;
+				auto mfHash = mod.value()->moduleFileHash;
+				auto importedBuffer = g_buffers.Read(mfHash).value();
+				moduleFile->file.AppendExportedMembers(str, importedBuffer);
+
+				// and double finally append all exported member for each loaded file.
+				for (auto load : moduleFile->loads)
+				{
+					if (auto loadedScope = g_fileScopes.Read(load))
+					{
+						auto loadedBuffer = g_buffers.Read(load).value();
+						loadedScope.value()->file.AppendExportedMembers(str, loadedBuffer);
+					}
+				}
+			}
+		}
+
+		return str.c_str();
+	}
+
+
+	// if we're not in a scope, then try to get the type of the node we're completing
+	// such as a member access expression.
 	auto type = GetTypeForNode(node, fileScope, buffer);
 
 	if (!type)
 	{
-		auto scope = GetScopeForNode(node, fileScope);
+		TSNode parent;
+		auto scope = GetScopeAndParentForNode(node, fileScope, &parent);
 		if (scope)
 		{
-			auto members = scope->entries;
-			for (auto& kvp : members)
+			scope->AppendMembers(str, buffer);
+			TSNode scopeScopeParent;
+			auto scopeScope = GetScopeAndParentForNode(parent, fileScope, &scopeScopeParent);
+			while (scopeScope)
 			{
-				str.append(kvp.second.name);
-				str.append(",");
+				scopeScope->AppendMembers(str, buffer);
+				scopeScope = GetScopeAndParentForNode(scopeScopeParent, fileScope, &scopeScopeParent);
 			}
+
+			// and append whatever is in file scope for good measure:
+			fileScope->file.AppendMembers(str, buffer);
+
+			// and append loads
+			for (auto load : fileScope->loads)
+			{
+				if (auto loadedScope = g_fileScopes.Read(load))
+				{
+					auto loadedBuffer = g_buffers.Read(load).value();
+					loadedScope.value()->file.AppendExportedMembers(str, loadedBuffer);
+				}
+			}
+
+			// and finally append imports.
+			for (auto import : fileScope->imports)
+			{
+				if (auto mod = g_modules.Read(import))
+				{
+					auto moduleFile = mod.value()->moduleFile;
+					auto mfHash = mod.value()->moduleFileHash;
+					auto importedBuffer = g_buffers.Read(mfHash).value();
+					moduleFile->file.AppendExportedMembers(str, importedBuffer);
+
+					// and double finally append all exported member for each loaded file.
+					for (auto load : moduleFile->loads)
+					{
+						if (auto loadedScope = g_fileScopes.Read(load))
+						{
+							auto loadedBuffer = g_buffers.Read(load).value();
+							loadedScope.value()->file.AppendExportedMembers(str, loadedBuffer);
+						}
+					}
+
+
+				}
+			}
+
 
 			return str.c_str();
 		}
@@ -46,9 +155,13 @@ export const char* GetCompletionItems(Hash documentHash, int row, int col)
 	if (members == nullptr)
 		return nullptr;
 
-	for ( auto& kvp : members->entries)
+	auto bufferForType = g_buffers.Read(type->documentHash).value();
+
+	for (auto& kvp : members->declarations)
 	{
-		str.append(kvp.second.name);
+		for (int i = 0; i < kvp.second.length; i++)
+			str.push_back(bufferForType->GetChar(kvp.second.startByte + i));
+
 		str.append(",");
 	}
 

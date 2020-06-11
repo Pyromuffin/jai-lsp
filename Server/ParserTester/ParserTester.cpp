@@ -4,43 +4,7 @@
 #include <iostream>
 #include <chrono>
 #include <unordered_map>
-#include "../Tree-sitter-jai-lib/GapBuffer.h"
-#include "../External/nlohmann/json.hpp"
-
-enum class TokenType
-{
-	Documentation,
-	Comment,
-	Keyword,
-	String,
-	Number,
-	Regexp,
-	Operator,
-	Namespace,
-	Type,
-	Struct,
-	Class,
-	Interface,
-	Enum,
-	TypeParameter,
-	Function,
-	Member,
-	Property,
-	Macro,
-	Variable,
-	Parameter,
-	Label,
-	EnumMember,
-};
-
-struct SemanticToken
-{
-	int line;
-	int col;
-	int length;
-	TokenType type;
-	int modifier;
-};
+#include "../Tree-sitter-jai-lib/TreeSitterJai.h"
 
 
 extern "C"
@@ -49,7 +13,9 @@ extern "C"
 	const char* GetCompletionItems(const char* code, int row, int col);
 	long long GetTokens(Hash documentHash, SemanticToken** outTokens, int* count);
 	const char* GetSyntax(const Hash& documentHash);
-	long long CreateTree(Hash documentHash, const char* code, int length);
+	static void CreateFileScope(FileScope* fileScope, const TSNode& node, GapBuffer* buffer, std::vector<Scope*>& scopeKing);
+	static void CreateScope(FileScope* fileScope, TSNode& node, GapBuffer* buffer, std::vector<TSNode>& parameters, Type*& currentType, std::vector<Scope*>& scopeKing);
+	long long CreateTree(const char* document, const char* code, int length);
 	long long EditTree(Hash documentHash, const char* change, int startLine, int startCol, int endLine, int endCol, int contentLength, int rangeLength);
 	long long UpdateTree(Hash documentHash);
 	long long CreateTreeFromPath(const char* document, const char* moduleName);
@@ -194,7 +160,7 @@ int main()
 		"}\n\n"
 		;
 
-	CreateTree(documentHash, test1, strlen(test1));
+	CreateTree(modulePath, test1, strlen(test1));
 
 }
 

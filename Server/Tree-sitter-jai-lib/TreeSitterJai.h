@@ -18,11 +18,14 @@ struct Constants
 	 TSSymbol funcDecl;
 	 TSSymbol structDecl;
 	 TSSymbol memberAccess;
+	 TSSymbol load;
+	 TSSymbol builtInType;
+	 TSSymbol identifier;
 };
 
 extern Constants g_constants;
 
-enum class TokenType
+enum class TokenType : uint8_t
 {
 	Documentation,
 	Comment,
@@ -48,7 +51,7 @@ enum class TokenType
 	EnumMember,
 };
 
-enum class TokenModifier
+enum class TokenModifier : uint8_t
 {
 	Documentation = 1 << 0,
 	Declaration = 1 << 1,
@@ -68,35 +71,46 @@ struct SemanticToken
 	TokenModifier modifier;
 };
 
-struct Type;
 struct Scope;
-
-struct Member
-{
-	const char* name;
-	Type* type;
-};
 
 struct Type
 {
 	const char* name;
 	Scope* members;
+	Hash documentHash;
+};
+
+
+enum DeclarationFlags : uint8_t
+{
+	Exported = 1 << 0,
+	Constant = 1 << 1,
+	Struct = 1 << 2,
+	Enum = 1 << 3,
+	Function =  1 << 4,
 };
 
 struct ScopeDeclaration
 {
-	TSNode definitionNode;
-	TokenType tokenType;
-	Type* type;
-#if _DEBUG
-	std::string name;
-#endif
+	//TokenType tokenType; // can be derived from type*
+	//TSNode definitionNode; // can probably be figured out from search.
+	DeclarationFlags flags;
+	uint16_t length;
+	uint32_t startByte;
+	Type* type; // maybe make this a handle.
 };
+
+inline DeclarationFlags operator|(DeclarationFlags a, DeclarationFlags b)
+{
+	return static_cast<DeclarationFlags>(static_cast<int>(a) | static_cast<int>(b));
+}
+
+constexpr auto size = sizeof(ScopeDeclaration);
 
 struct Scope
 {
 	bool imperative;
-	std::unordered_map<Hash, ScopeDeclaration> entries;
+	std::unordered_map<Hash, ScopeDeclaration> declarations;
 
 #if _DEBUG
 	buffer_view content;
@@ -104,54 +118,47 @@ struct Scope
 	
 	std::optional<ScopeDeclaration> TryGet(Hash hash)
 	{
-		auto it = entries.find(hash);
-		if (it == entries.end())
+		auto it = declarations.find(hash);
+		if (it == declarations.end())
 			return std::nullopt;
 
 		return std::optional<ScopeDeclaration>(it->second);
 	}
-};
 
-struct ModuleScopeDeclaration
-{
-	TSNode definitionNode;
-	Hash definingFile;
-	TokenType tokenType; // might not need this anymore because we can get it from type
-	Type* type;
-
-#if _DEBUG
-	std::string name;
-#endif
-
-};
-
-struct ModuleScope
-{
-	std::unordered_map<Hash, ModuleScopeDeclaration> entries;
-
-#if _DEBUG
-	buffer_view content;
-#endif
-
-	std::optional<ModuleScopeDeclaration> TryGet(Hash hash)
+	void AppendMembers(std::string& str, GapBuffer* buffer, uint32_t upTo = UINT_MAX)
 	{
-		auto it = entries.find(hash);
-		if (it == entries.end())
-			return std::nullopt;
+		for (auto& kvp : declarations)
+		{
+			if (imperative && (int)kvp.second.startByte > upTo)
+				continue;
 
-		return std::optional<ModuleScopeDeclaration>(it->second);
+			for (int i = 0; i < kvp.second.length; i++)
+				str.push_back(buffer->GetChar(kvp.second.startByte + i));
+
+			str.push_back(',');
+		}
 	}
 
+	void AppendExportedMembers(std::string& str, GapBuffer* buffer)
+	{
+		for (auto& kvp : declarations)
+		{
+			if (kvp.second.flags & DeclarationFlags::Exported)
+			{
+				for (int i = 0; i < kvp.second.length; i++)
+					str.push_back(buffer->GetChar(kvp.second.startByte + i));
+
+				str.push_back(',');
+			}
+		}
+	}
 
 };
 
-struct FileScope
-{
-	std::vector<Hash> imports;
-	std::unordered_map<const void*, Scope> scopes;
-	std::vector<SemanticToken> tokens;
-	Scope file;
-};
+
+
+
+
 
 
 template <typename T>
@@ -185,10 +192,106 @@ struct ConcurrentDictionary
 };
 
 
+
+
+struct FileScope;
+
+struct Module
+{
+	bool dirty;
+	FileScope* moduleFile;
+	Hash moduleFileHash;
+
+	Scope exportedScope;
+	void BuildExportedScope();
+	std::optional<ScopeDeclaration> Search(Hash hash);
+};
+
+
+extern ConcurrentDictionary<Module*> g_modules;
+extern ConcurrentDictionary<FileScope*> g_fileScopes;
+
+
+struct FileScope
+{
+	std::vector<Hash> imports;
+	std::vector<Hash> loads;
+	std::unordered_map<const void*, Scope> scopes;
+	std::vector<SemanticToken> tokens;
+	Scope file;
+
+
+	//  oooooo kkkkk ay
+	// i realize now that imports CAN be exported and we probably need to account for this.
+	// this is evidenced by the fact that sometimes imports are declared in file scope, presumably so they don't leak out to the module.
+
+	std::optional<ScopeDeclaration> SearchExports(Hash identifierHash)
+	{
+		if (auto decl = file.TryGet(identifierHash))
+		{
+			if(decl.value().flags & DeclarationFlags::Exported)
+				return decl;
+		}
+
+		for (auto loadHash : loads)
+		{
+			if (auto file = g_fileScopes.Read(loadHash))
+			{
+				if (auto decl = file.value()->SearchExports(identifierHash))
+				{
+					return decl;
+				}
+			}
+		}
+
+		return std::nullopt;
+	}
+
+	std::optional<ScopeDeclaration> SearchModules(Hash identifierHash)
+	{
+		for (auto modHash : imports)
+		{
+			if (auto mod = g_modules.Read(modHash))
+			{
+				if (auto decl = mod.value()->Search(identifierHash))
+				{
+					return decl;
+				}
+			}
+		}
+
+		for (auto loadHash : loads)
+		{
+			if (auto file = g_fileScopes.Read(loadHash))
+			{
+				if (auto decl = file.value()->SearchExports(identifierHash))
+				{
+					return decl;
+				}
+			}
+		}
+
+		return std::nullopt;
+	}
+
+
+	std::optional<ScopeDeclaration> Search(Hash identifierHash)
+	{
+		if (auto decl = file.TryGet(identifierHash))
+		{
+			return decl;
+		}
+
+		return SearchModules(identifierHash);
+	}
+};
+
+
+
+
 extern ConcurrentDictionary<TSTree*> g_trees;
 extern ConcurrentDictionary<GapBuffer*> g_buffers;
-extern ConcurrentDictionary<ModuleScope*> g_modules;
-extern ConcurrentDictionary<FileScope*> g_fileScopes;
+extern ConcurrentDictionary<std::string> g_filePaths;
 
 std::string_view GetIdentifier(const TSNode& node, std::string_view code);
 Hash GetIdentifierHash(const TSNode& node, std::string_view code);
@@ -196,3 +299,4 @@ Hash GetIdentifierHash(const TSNode& node, GapBuffer* buffer);
 Scope* GetScopeForNode(const TSNode& node, FileScope* scope);
 Scope* GetScopeAndParentForNode(const TSNode& node, FileScope* scope, TSNode* outParentNode);
 Type* GetTypeForNode(TSNode node, FileScope* fileScope, GapBuffer* buffer);
+export long long CreateTree(const char* documentPath, const char* code, int length);
