@@ -1,0 +1,8 @@
+{
+  "runtimeOptions": {
+    "additionalProbingPaths": [
+      "C:\\Users\\pyrom\\.dotnet\\store\\|arch|\\|tfm|",
+      "C:\\Users\\pyrom\\.nuget\\packages"
+    ]
+  }
+}

@@ -4,6 +4,8 @@
 #include <iostream>
 #include <chrono>
 #include <unordered_map>
+#include <filesystem>
+#include <fstream>
 #include "../Tree-sitter-jai-lib/TreeSitterJai.h"
 
 
@@ -13,9 +15,9 @@ extern "C"
 	const char* GetCompletionItems(const char* code, int row, int col);
 	long long GetTokens(Hash documentHash, SemanticToken** outTokens, int* count);
 	const char* GetSyntax(const Hash& documentHash);
+	static void HandleVariableReference(TSNode& node, GapBuffer* buffer, std::vector<Scope*>& scopeKing, FileScope* fileScope, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex);
+	static void HandleUnresolvedReferences(std::vector<int>& unresolvedTokenIndex, std::vector<TSNode>& unresolvedEntry, GapBuffer* buffer, FileScope* fileScope);
 	static void CreateFileScope(FileScope* fileScope, const TSNode& node, GapBuffer* buffer, std::vector<Scope*>& scopeKing);
-	static void CreateScope(FileScope* fileScope, TSNode& node, GapBuffer* buffer, std::vector<TSNode>& parameters, Type*& currentType, std::vector<Scope*>& scopeKing);
-	long long CreateTree(const char* document, const char* code, int length);
 	long long EditTree(Hash documentHash, const char* change, int startLine, int startCol, int endLine, int endCol, int contentLength, int rangeLength);
 	long long UpdateTree(Hash documentHash);
 	long long CreateTreeFromPath(const char* document, const char* moduleName);
@@ -39,10 +41,10 @@ static void EditReplaceTest()
 
 
 	//UpdateTree("tomato", originalCode, strlen(originalCode));
-	std::cout << GetSyntax(StringHash("tomato")) << "\n";
+	//std::cout << GetSyntax(StringHash("tomato")) << "\n";
 
-//	UpdateTreeIncremental("tomato", changedCode, 1, 5, 18, -1);
-	std::cout << GetSyntax(StringHash("tomato")) << "\n";
+   //UpdateTreeIncremental("tomato", changedCode, 1, 5, 18, -1);
+	//std::cout << GetSyntax(StringHash("tomato")) << "\n";
 }
 
 static void SemanticTokensTest()
@@ -122,6 +124,68 @@ void PrintTokens(Hash documentHash)
 }
 
 
+
+void ParseModules(int tries)
+{
+	std::unordered_map<std::string, std::string> files;
+
+	auto modulesPath = "C:\\Users\\pyrom\\Desktop\\jai\\modules\\";
+	auto directories = std::filesystem::directory_iterator(modulesPath);
+	for (auto dir : directories)
+	{
+		if (dir.is_directory())
+		{
+			auto path = dir.path();
+			auto subdirs = std::filesystem::directory_iterator(dir);
+			for (auto subdir : subdirs)
+			{
+				if (subdir.path().extension().compare(".jai") == 0)
+				{
+					std::ifstream t(subdir.path());
+					t.seekg(0, std::ios::end);
+					size_t size = t.tellg();
+					std::string buffer(size, ' ');
+					t.seekg(0);
+					t.read(&buffer[0], size);
+					files[subdir.path().string()] = buffer;
+				}
+			}
+			
+		}
+	}
+
+
+	for (int i = 0; i < tries; i++)
+	{
+		long long time = 0;
+
+		std::vector<Timings> timingses;
+
+		for (auto& kvp : files)
+		{
+			Timings t;
+			time += CreateTree(kvp.first.c_str(), kvp.second.c_str(), kvp.second.length());
+			timingses.push_back(t);
+		}
+
+		int bufferTime = 0;
+		int parseTime = 0;
+		int scopeTime = 0;
+
+		for (auto& t : timingses)
+		{
+			bufferTime += t.bufferTime;
+			parseTime += t.parseTime - t.bufferTime;
+			scopeTime += t.scopeTime - t.parseTime;
+		}
+
+		std::cout << time << ",";
+	}
+
+}
+
+
+
 int main()
 {
 	/*
@@ -137,30 +201,7 @@ int main()
 	
 	Init();
 
-	auto file = fopen(path, "r");
-	int i = 0;
-
-	while (1) {
-		auto c = fgetc(file);
-		if (feof(file)) {
-			break;
-		}
-		buffer[i++] = c;
-	}
-
-	buffer[i] = '\0';
-
-
-	auto modulePath = "C:\\Users\\pyrom\\Desktop\\jai\\modules\\Basic\\module.jai";
-	Hash documentHash = StringHash("Tomato");
-
-	const char* test1 =
-		"main :: () {\n"
-		"foo : int;\n"
-		"}\n\n"
-		;
-
-	CreateTree(modulePath, test1, strlen(test1));
+	ParseModules(30);
 
 }
 

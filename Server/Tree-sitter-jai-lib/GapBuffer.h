@@ -45,7 +45,7 @@ public:
     GapBuffer();
     bool IsRewound();
     void Rewind();
-    inline char GetChar(int index);
+    inline char GetChar(int index) const;
     void Seek(int line, int col);
     void InsertAtCursor(const char* content, int length);
     GapBuffer(const char* initialContent, int length);
@@ -72,12 +72,12 @@ public:
 
 struct buffer_view
 {
-    GapBuffer* buffer;
+    const GapBuffer* buffer;
     uint32_t start;
     uint32_t length;
 
     buffer_view() = default;
-    buffer_view(int start, int end, GapBuffer* buffer);
+    buffer_view(int start, int end, const GapBuffer* buffer);
 
     std::string Copy();
     char* CopyMalloc();
@@ -108,4 +108,44 @@ inline Hash StringHash(buffer_view string)
     }
 
     return { hash };
+}
+
+
+inline Hash GetIdentifierHash(const TSNode& node, std::string_view code)
+{
+    auto start = ts_node_start_byte(node);
+    auto end = ts_node_end_byte(node);
+    auto length = end - start;
+    return StringHash(std::string_view(&code[start], length));
+}
+
+inline Hash GetIdentifierHash(const TSNode& node, const GapBuffer* buffer)
+{
+    auto start = ts_node_start_byte(node);
+    auto end = ts_node_end_byte(node);
+    return StringHash(buffer_view(start, end, buffer));
+}
+
+inline std::string_view GetIdentifier(const TSNode& node, std::string_view code)
+{
+    auto start = ts_node_start_byte(node);
+    auto end = ts_node_end_byte(node);
+    auto length = end - start;
+    return std::string_view(&code[start], length);
+}
+
+
+inline buffer_view GetIdentifierFromBuffer(const TSNode& node, const GapBuffer* buffer)
+{
+    auto start = ts_node_start_byte(node);
+    auto end = ts_node_end_byte(node);
+    return buffer_view(start, end, buffer);
+}
+
+
+inline std::string GetIdentifierFromBufferCopy(const TSNode& node, const GapBuffer* buffer)
+{
+    auto start = ts_node_start_byte(node);
+    auto end = ts_node_end_byte(node);
+    return buffer_view(start, end, buffer).Copy();
 }

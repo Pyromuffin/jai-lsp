@@ -4,6 +4,7 @@
     "description": "jai lsp client",
     "publisher": "pyromuffin",
     "version": "0.0.1",
+    "repository": "https://github.com/pyromuffin/jai-lsp",
     "engines": {
         "vscode": "^1.41.0"
     },

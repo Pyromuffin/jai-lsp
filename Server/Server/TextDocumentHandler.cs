@@ -16,7 +16,7 @@ namespace jai_lsp
     class HashNamer
     {
         public ConcurrentDictionary<ulong, string> hashToName = new ConcurrentDictionary<ulong, string>();
-        public ILanguageServerDocument document;
+        public OmniSharp.Extensions.LanguageServer.Server.ILanguageServer server;
     }
 
 

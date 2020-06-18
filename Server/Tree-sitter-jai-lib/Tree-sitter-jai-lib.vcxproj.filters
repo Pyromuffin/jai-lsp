@@ -30,6 +30,9 @@
     <ClInclude Include="TreeSitterJai.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="FileScope.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Tree-sitter-jai-lib.cpp">
@@ -54,6 +57,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Modules.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="FileScope.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

@@ -1,4 +1,16 @@
 #include "TreeSitterJai.h"
+#include "FileScope.h"
+
+
+const TypeKing* GetType(TypeHandle handle)
+{
+	if (handle.fileIndex == UINT16_MAX)
+	{
+		return nullptr;
+	}
+
+	return &g_fileScopeByIndex[handle.fileIndex]->types[handle.index];
+}
 
 std::optional<ScopeDeclaration> GetDeclarationForNodeFromScope(TSNode node, FileScope* fileScope, GapBuffer* buffer, Scope* scope, TSNode parent)
 {
@@ -31,7 +43,7 @@ std::optional<ScopeDeclaration> GetDeclarationForNodeFromScope(TSNode node, File
 }
 
 
-std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fileScope, GapBuffer* buffer)
+std::optional<ScopeDeclaration> GetDeclarationForTopLevelNode(TSNode node, FileScope* fileScope, GapBuffer* buffer)
 {
 	TSNode parent;
 	auto scope = GetScopeAndParentForNode(node, fileScope, &parent);
@@ -39,13 +51,13 @@ std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fi
 }
 
 
-Type* EvaluateMemberAccess(TSNode node, FileScope* fileScope, GapBuffer* buffer)
+std::optional<ScopeDeclaration> EvaluateMemberAccess(TSNode node, FileScope* fileScope, GapBuffer* buffer)
 {
 	// rhs should always be an identifier ?
 	
 	auto lhs = ts_node_named_child(node, 0);
 	auto lhsSymbol = ts_node_symbol(lhs);
-	Type* lhsType = nullptr;
+	std::optional<ScopeDeclaration> lhsType = std::nullopt;
 
 	if (lhsSymbol == g_constants.memberAccess)
 	{
@@ -53,28 +65,33 @@ Type* EvaluateMemberAccess(TSNode node, FileScope* fileScope, GapBuffer* buffer)
 	}
 	else
 	{
-		if (auto decl = GetDeclarationForNode(lhs, fileScope, buffer))
+		if (auto decl = GetDeclarationForTopLevelNode(lhs, fileScope, buffer))
 		{
-			lhsType = decl.value().type;
+			
+			lhsType = decl;
 		}
 	}
 
 	if (!lhsType)
-		return nullptr;
+		return std::nullopt;
 
 	auto rhs = ts_node_named_child(node, 1);
 	auto rhsHash = GetIdentifierHash(rhs, buffer);
-
-	if (auto rhsDecl = lhsType->members->TryGet(rhsHash))
+	auto typeKing = GetType(lhsType->type);
+	
+	if (typeKing)
 	{
-		return rhsDecl.value().type;
+		if (auto rhsDecl = typeKing->members->TryGet(rhsHash))
+		{
+			return rhsDecl;
+		}
 	}
 
-	return nullptr;
+	return std::nullopt;
 }
 
 
-Type* GetTypeForNode(TSNode node, FileScope* fileScope, GapBuffer* buffer)
+std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fileScope, GapBuffer* buffer)
 {
 	/*
 				---------------
@@ -138,7 +155,21 @@ Type* GetTypeForNode(TSNode node, FileScope* fileScope, GapBuffer* buffer)
 	auto decl = GetDeclarationForNodeFromScope(node, fileScope, buffer, scope, parent);
 	if (decl)
 	{
-		return decl.value().type;
+		return decl;
+	}
+
+	return std::nullopt;
+}
+
+
+const TypeKing* GetTypeForNode(TSNode node, FileScope* fileScope, GapBuffer* buffer)
+{
+	if (auto decl = GetDeclarationForNode(node, fileScope, buffer))
+	{
+		if (auto type = GetType(decl->type))
+		{
+			return type;
+		}
 	}
 
 	return nullptr;
@@ -154,13 +185,13 @@ export const char* Hover(Hash documentName, int row, int col)
 
 	auto point = TSPoint{ static_cast<uint32_t>(row), static_cast<uint32_t>(col) };
 	auto node = ts_node_named_descendant_for_point_range(root, point, point);
-	auto type = GetTypeForNode(node, fileScope, buffer);
-
-	if (type)
+	
+	if (auto type = GetTypeForNode(node, fileScope, buffer))
 	{
 		ts_tree_delete(tree);
-		return type->name;
+		return type->name.c_str();
 	}
+
 
 	ts_tree_delete(tree);
 	return nullptr;

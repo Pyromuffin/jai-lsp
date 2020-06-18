@@ -169,6 +169,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="DefinitionFinder.h" />
+    <ClInclude Include="FileScope.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="GapBuffer.h" />
     <ClInclude Include="Timer.h" />
@@ -177,6 +178,7 @@
   <ItemGroup>
     <ClCompile Include="Completer.cpp" />
     <ClCompile Include="DefinitionFinder.cpp" />
+    <ClCompile Include="FileScope.cpp" />
     <ClCompile Include="GapBuffer.cpp" />
     <ClCompile Include="Hoverer.cpp" />
     <ClCompile Include="lib.c" />

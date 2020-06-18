@@ -26,8 +26,8 @@ export function activate(context: ExtensionContext) {
     // If the extension is launched in debug mode then the debug server options are used
     // Otherwise the run options are used
     let serverOptions: ServerOptions = {
-        run: { command: serverExe, args: ['C:\\Users\\pyrom\\Documents\\GitHub\\jai-lsp\\Server\\Server\\bin\\Release\\net5.0\\jai-lsp-server.dll'] },
-        debug: { command: serverExe, args: ['C:\\Users\\pyrom\\Documents\\GitHub\\jai-lsp\\Server\\x64\\Debug\\ParserTester.exe'] }
+        run: { command: serverExe, args: [context.extensionPath +'\\lib\\jai-lsp-server.dll'] },
+        debug: { command: serverExe, args: ['C:\\Users\\pyrom\\Documents\\GitHub\\jai-lsp\\Server\\Server\\bin\\Debug\\net5.0\\jai-lsp-server.dll'] }
     }
 
     // Options to control the language client
@@ -54,32 +54,11 @@ export function activate(context: ExtensionContext) {
         clientOptions
     );
     client.registerProposedFeatures();
-    client.trace = Trace.Verbose;
+    client.trace = Trace.Off;
     let disposable = client.start();
 
     // Push the disposable to the context's subscriptions so that the
     // client can be deactivated on extension deactivation
     context.subscriptions.push(disposable);
-
-
-    /*
-    const tokenTypes = ['class', 'interface', 'enum', 'function', 'variable'];
-    const tokenModifiers = ['declaration', 'documentation'];
-    const legend = new vscode.SemanticTokensLegend(tokenTypes, tokenModifiers);
-    
-    const provider: vscode.DocumentSemanticTokensProvider = {
-      provideDocumentSemanticTokens( document: vscode.TextDocument ):
-       vscode.ProviderResult<vscode.SemanticTokens> {
-          let builder = new vscode.SemanticTokensBuilder(legend);
-          builder.push(0,0,10, 1,0);
-
-        return builder.build();
-      }
-    };
-    
-    const selector = { language: 'jai', scheme: 'file' };
-    
-    vscode.languages.registerDocumentSemanticTokensProvider(selector, provider, legend);
-    */
 }
 

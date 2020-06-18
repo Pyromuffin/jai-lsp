@@ -28,7 +28,7 @@ namespace jai_lsp
         static async Task MainAsync(string[] args)
         {
 
-#if DEBUG
+#if DEBUG 
             System.Diagnostics.Debugger.Launch();
             while (!System.Diagnostics.Debugger.IsAttached)
             {
@@ -40,10 +40,9 @@ namespace jai_lsp
             Log.Logger = new LoggerConfiguration()
                 .Enrich.FromLogContext()
                 .WriteTo.File("log.txt", rollingInterval: RollingInterval.Day)
-                .MinimumLevel.Verbose()
+                .MinimumLevel.Error()
               .CreateLogger();
 
-            Log.Logger.Information("This only goes file...");
 
             //IObserver<WorkDoneProgressReport> workDone = null;
 
@@ -54,16 +53,21 @@ namespace jai_lsp
                     .ConfigureLogging(x => x
                         .AddSerilog()
                         .AddLanguageServer()
+#if DEBUG
                         .SetMinimumLevel(LogLevel.Debug))
+#else
+                        .SetMinimumLevel(LogLevel.Error))
+#endif
+                    .WithHandler<SignatureHelper>()
                     .WithHandler<Definer>()
                     .WithHandler<Hoverer>()
                     .WithHandler<TextDocumentHandler>()
                     .WithHandler<CompletionHandler>()
-                    //.WithHandler<FoldingRangeHandler>()
-                    //.WithHandler<MyWorkspaceSymbolsHandler>()
-                    //.WithHandler<MyDocumentSymbolHandler>()
                     .WithHandler<WorkspaceFolderChangeHandler>()
+
+                    // handlers added after here dont work i think!
                     .WithHandler<SemanticHighlight>()
+
                     .WithServices(ConfigureServices)
                     .WithServices(x => x.AddLogging(b => b.SetMinimumLevel(LogLevel.Error)))
                     .WithServices(services => {
@@ -131,7 +135,7 @@ namespace jai_lsp
                         using var manager = languageServer.ProgressManager.Create(new WorkDoneProgressBegin() { Title = "Parsing Modules", Percentage = 0, Cancellable = true });
                         var logger = languageServer.Services.GetService<ILogger<Logjam>>();
                         var namer = languageServer.Services.GetService<HashNamer>();
-                        namer.document = languageServer.Document;
+                        namer.server = languageServer;
 
                         WorkspaceFolderParams wsf = new WorkspaceFolderParams();
                         var wsfresults = await languageServer.Client.SendRequest(wsf, token);
@@ -150,6 +154,7 @@ namespace jai_lsp
                             var count = moduleDirectories.Count();
                             int current = 0;
                             List<Task> tasks = new List<Task>();
+                            long totalTime = 0;
 
                             foreach (var moduleDirectory in moduleDirectories)
                             {
@@ -163,16 +168,18 @@ namespace jai_lsp
                                 if(exists)
                                 {
                                     manager.OnNext(new WorkDoneProgressReport() { Message = moduleFilePath, Percentage = (double)current / count });
-                                    var task = Task.Run(() => TreeSitter.CreateTreeFromPath(moduleFilePath, moduleName));
-                                    tasks.Add(task);
+                                    //var task = Task.Run(() => TreeSitter.CreateTreeFromPath(moduleFilePath, moduleName));
+                                    //tasks.Add(task);
+                                    totalTime += TreeSitter.CreateTreeFromPath(moduleFilePath, moduleName);
                                     current++;
                                 }
 
                             }
 
-                            await Task.WhenAll(tasks);
-                        }
+                            //await Task.WhenAll(tasks);
+                            logger.LogInformation("Total time for serial module parsing: " + totalTime + " micros");
 
+                        }
                         manager.OnCompleted();
                     })
                     

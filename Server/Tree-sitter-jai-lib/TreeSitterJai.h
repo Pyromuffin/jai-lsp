@@ -21,6 +21,10 @@ struct Constants
 	 TSSymbol load;
 	 TSSymbol builtInType;
 	 TSSymbol identifier;
+	 TSSymbol namedDecl;
+	 TSSymbol scopeFile;
+	 TSSymbol scopeExport;
+	 TSSymbol dataScope;
 };
 
 extern Constants g_constants;
@@ -73,11 +77,29 @@ struct SemanticToken
 
 struct Scope;
 
-struct Type
+struct TypeKing
 {
-	const char* name;
+	enum Kind
+	{
+		structure,
+		function
+	};
+
+	std::string name;
 	Scope* members;
-	Hash documentHash;
+};
+
+
+struct TypeHandle
+{
+	uint16_t fileIndex;
+	uint16_t index;
+
+	static constexpr TypeHandle Null()
+	{
+		return TypeHandle{ .fileIndex = UINT16_MAX, .index = 0 };
+	}
+
 };
 
 
@@ -88,17 +110,18 @@ enum DeclarationFlags : uint8_t
 	Struct = 1 << 2,
 	Enum = 1 << 3,
 	Function =  1 << 4,
+	BuiltIn = 1 << 5,
 };
 
 struct ScopeDeclaration
 {
-	//TokenType tokenType; // can be derived from type*
-	//TSNode definitionNode; // can probably be figured out from search.
 	DeclarationFlags flags;
 	uint16_t length;
+	uint16_t fileIndex;
 	uint32_t startByte;
-	Type* type; // maybe make this a handle.
+	TypeHandle type; 
 };
+
 
 inline DeclarationFlags operator|(DeclarationFlags a, DeclarationFlags b)
 {
@@ -106,18 +129,44 @@ inline DeclarationFlags operator|(DeclarationFlags a, DeclarationFlags b)
 }
 
 constexpr auto size = sizeof(ScopeDeclaration);
+#define SMALL true
+
 
 struct Scope
 {
-	bool imperative;
-	std::unordered_map<Hash, ScopeDeclaration> declarations;
-
-#if _DEBUG
-	buffer_view content;
-#endif
+	static constexpr int small_size = 8;
 	
-	std::optional<ScopeDeclaration> TryGet(Hash hash)
+private:
+#if SMALL
+	Hash small_hashes[small_size];
+	ScopeDeclaration small_declarations[small_size];
+#endif
+	std::unordered_map<Hash, ScopeDeclaration> declarations;
+	int size;
+
+public:
+	bool imperative;
+	void Clear()
 	{
+		size = 0;
+		declarations.clear();
+	}
+
+	std::optional<ScopeDeclaration> TryGet(const Hash hash)
+	{
+#if SMALL
+		if (size < small_size)
+		{
+			for (int i = 0; i < size; i++)
+			{
+				if (small_hashes[i] == hash)
+					return small_declarations[i];
+			}
+
+			return std::nullopt;
+		}
+#endif
+
 		auto it = declarations.find(hash);
 		if (it == declarations.end())
 			return std::nullopt;
@@ -125,8 +174,54 @@ struct Scope
 		return std::optional<ScopeDeclaration>(it->second);
 	}
 
-	void AppendMembers(std::string& str, GapBuffer* buffer, uint32_t upTo = UINT_MAX)
+	void Add(const Hash hash, const ScopeDeclaration decl)
 	{
+#if SMALL
+		if (size < small_size)
+		{
+			small_hashes[size] = hash;
+			small_declarations[size] = decl;
+			size++;
+
+			return;
+		}
+		if (size == small_size)
+		{
+			for (int i = 0; i < small_size; i++)
+			{
+				auto small_hash = small_hashes[i];
+				auto small_decl = small_declarations[i];
+				declarations.insert({ small_hash, small_decl });
+			}
+		}
+#endif
+
+		declarations.insert({ hash, decl });
+		size++;
+	}
+
+
+	void AppendMembers(std::string& str, const GapBuffer* buffer, uint32_t upTo = UINT_MAX)
+	{
+#if SMALL
+		if (size < small_size)
+		{
+			for (int i = 0; i < size; i++)
+			{
+				auto decl = small_declarations[i];
+				if (imperative && (int)decl.startByte > upTo)
+					continue;
+
+				for (int i = 0; i < decl.length; i++)
+					str.push_back(buffer->GetChar(decl.startByte + i));
+				
+				str.push_back(',');
+			}
+
+			return;
+		}
+#endif
+
 		for (auto& kvp : declarations)
 		{
 			if (imperative && (int)kvp.second.startByte > upTo)
@@ -139,8 +234,26 @@ struct Scope
 		}
 	}
 
-	void AppendExportedMembers(std::string& str, GapBuffer* buffer)
+	void AppendExportedMembers(std::string& str, const GapBuffer* buffer)
 	{
+#if SMALL
+		if (size < small_size)
+		{
+			for (int i = 0; i < size; i++)
+			{
+				auto decl = small_declarations[i];
+				if (decl.flags & DeclarationFlags::Exported)
+				{
+					for (int i = 0; i < decl.length; i++)
+						str.push_back(buffer->GetChar(decl.startByte + i));
+
+					str.push_back(',');
+				}
+			}
+
+			return;
+		}
+#endif
 		for (auto& kvp : declarations)
 		{
 			if (kvp.second.flags & DeclarationFlags::Exported)
@@ -212,77 +325,39 @@ extern ConcurrentDictionary<Module*> g_modules;
 extern ConcurrentDictionary<FileScope*> g_fileScopes;
 
 
-struct FileScope
+
+struct Cursor
 {
-	std::vector<Hash> imports;
-	std::vector<Hash> loads;
-	std::unordered_map<const void*, Scope> scopes;
-	std::vector<SemanticToken> tokens;
-	Scope file;
+	TSTreeCursor cursor;
 
-
-	//  oooooo kkkkk ay
-	// i realize now that imports CAN be exported and we probably need to account for this.
-	// this is evidenced by the fact that sometimes imports are declared in file scope, presumably so they don't leak out to the module.
-
-	std::optional<ScopeDeclaration> SearchExports(Hash identifierHash)
+	Cursor()
 	{
-		if (auto decl = file.TryGet(identifierHash))
-		{
-			if(decl.value().flags & DeclarationFlags::Exported)
-				return decl;
-		}
-
-		for (auto loadHash : loads)
-		{
-			if (auto file = g_fileScopes.Read(loadHash))
-			{
-				if (auto decl = file.value()->SearchExports(identifierHash))
-				{
-					return decl;
-				}
-			}
-		}
-
-		return std::nullopt;
+		cursor = ts_tree_cursor_new(TSNode());
 	}
 
-	std::optional<ScopeDeclaration> SearchModules(Hash identifierHash)
+	void Reset(TSNode node)
 	{
-		for (auto modHash : imports)
-		{
-			if (auto mod = g_modules.Read(modHash))
-			{
-				if (auto decl = mod.value()->Search(identifierHash))
-				{
-					return decl;
-				}
-			}
-		}
-
-		for (auto loadHash : loads)
-		{
-			if (auto file = g_fileScopes.Read(loadHash))
-			{
-				if (auto decl = file.value()->SearchExports(identifierHash))
-				{
-					return decl;
-				}
-			}
-		}
-
-		return std::nullopt;
+		ts_tree_cursor_reset(&cursor, node);
 	}
 
-
-	std::optional<ScopeDeclaration> Search(Hash identifierHash)
+	bool Child()
 	{
-		if (auto decl = file.TryGet(identifierHash))
-		{
-			return decl;
-		}
+		return ts_tree_cursor_goto_first_child(&cursor);
+	}
 
-		return SearchModules(identifierHash);
+	TSNode Current()
+	{
+		return ts_tree_cursor_current_node(&cursor);
+	}
+
+	bool Sibling()
+	{
+		return ts_tree_cursor_goto_next_sibling(&cursor);
+	}
+
+	bool Parent()
+	{
+		return ts_tree_cursor_goto_parent(&cursor);
 	}
 };
 
@@ -292,11 +367,25 @@ struct FileScope
 extern ConcurrentDictionary<TSTree*> g_trees;
 extern ConcurrentDictionary<GapBuffer*> g_buffers;
 extern ConcurrentDictionary<std::string> g_filePaths;
+extern std::vector<const FileScope*> g_fileScopeByIndex;
+
 
 std::string_view GetIdentifier(const TSNode& node, std::string_view code);
 Hash GetIdentifierHash(const TSNode& node, std::string_view code);
-Hash GetIdentifierHash(const TSNode& node, GapBuffer* buffer);
+Hash GetIdentifierHash(const TSNode& node, const GapBuffer* buffer);
 Scope* GetScopeForNode(const TSNode& node, FileScope* scope);
 Scope* GetScopeAndParentForNode(const TSNode& node, FileScope* scope, TSNode* outParentNode);
-Type* GetTypeForNode(TSNode node, FileScope* fileScope, GapBuffer* buffer);
+std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fileScope, GapBuffer* buffer);
+const TypeKing* GetTypeForNode(TSNode node, FileScope* fileScope, GapBuffer* buffer);
+const TypeKing* GetType(TypeHandle handle);
+TokenType GetTokenTypeFromFlags(DeclarationFlags flags);
+
+
+struct Timings
+{
+	long long bufferTime;
+	long long parseTime;
+	long long scopeTime;
+};
+
 export long long CreateTree(const char* documentPath, const char* code, int length);

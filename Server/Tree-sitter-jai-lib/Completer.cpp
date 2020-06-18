@@ -1,5 +1,5 @@
 #include "TreeSitterJai.h"
-
+#include "FileScope.h"
 
 enum InvocationType
 {
@@ -90,9 +90,22 @@ export const char* GetCompletionItems(Hash documentHash, int row, int col, Invoc
 
 	// if we're not in a scope, then try to get the type of the node we're completing
 	// such as a member access expression.
-	auto type = GetTypeForNode(node, fileScope, buffer);
+	
+	if (auto decl = GetDeclarationForNode(node, fileScope, buffer))
+	{
+		if (auto type = GetType(decl->type))
+		{
+			if (type->members == nullptr)
+				return nullptr;
+	
+			auto bufferForType = g_fileScopeByIndex[decl->type.fileIndex]->buffer;
+			type->members->AppendMembers(str, bufferForType);
 
-	if (!type)
+			return str.c_str();
+		}
+
+	}
+	else
 	{
 		TSNode parent;
 		auto scope = GetScopeAndParentForNode(node, fileScope, &parent);
@@ -151,19 +164,5 @@ export const char* GetCompletionItems(Hash documentHash, int row, int col, Invoc
 		return nullptr;
 	}
 
-	auto members = type->members;
-	if (members == nullptr)
-		return nullptr;
-
-	auto bufferForType = g_buffers.Read(type->documentHash).value();
-
-	for (auto& kvp : members->declarations)
-	{
-		for (int i = 0; i < kvp.second.length; i++)
-			str.push_back(bufferForType->GetChar(kvp.second.startByte + i));
-
-		str.append(",");
-	}
-
-	return str.c_str();
+	
 }

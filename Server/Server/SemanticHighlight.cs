@@ -9,6 +9,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using OmniSharp.Extensions.LanguageServer.Server;
 using System;
 using System.Collections.Generic;
+using System.Reflection.Metadata;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -124,6 +125,8 @@ namespace jai_lsp
             return Task.FromResult(new SemanticTokensDocument(GetRegistrationOptions().Legend));
         }
 
+        static int editNumber = 1;
+
         protected override Task Tokenize(SemanticTokensBuilder builder, ITextDocumentIdentifierParams identifier, CancellationToken cancellationToken)
         {
             var hash = Hash.StringHash(identifier.TextDocument.Uri.GetFileSystemPath());
@@ -162,8 +165,24 @@ namespace jai_lsp
                 }
             }
 
+            WorkspaceEdit edit = new WorkspaceEdit();
+            TextDocumentEdit textEdit = new TextDocumentEdit();
+            textEdit.TextDocument = new VersionedTextDocumentIdentifier();
+            textEdit.TextDocument.Uri = DocumentUri.FromFileSystemPath("C:\\Users\\pyrom\\Desktop\\jai\\how_to\\001_first.jai").ToUri();
+            textEdit.TextDocument.Version = editNumber;
+            editNumber++;
+            
+
+            WorkspaceEditDocumentChange docChange = new WorkspaceEditDocumentChange(textEdit);
+
+
+            edit.DocumentChanges = new Container<WorkspaceEditDocumentChange>(docChange);
+            
+
+            namer.server.SendRequest("workspace/applyEdit", edit);
+
             diagnosticParams.Diagnostics = diagnostics;
-            namer.document.PublishDiagnostics(diagnosticParams);
+            namer.server.Document.PublishDiagnostics(diagnosticParams);
 
             return Unit.Task;
         }

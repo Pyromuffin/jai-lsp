@@ -75,7 +75,7 @@ void GapBuffer::Rewind()
     }
 }
 
-char GapBuffer::GetChar(int index)
+char GapBuffer::GetChar(int index) const
 {
     if (index < before.size())
     {
@@ -128,7 +128,24 @@ void GapBuffer::InsertAtCursor(const char* content, int length)
 
 GapBuffer::GapBuffer(const char* initialContent, int length)
 {
-    InsertAtCursor(initialContent, length);
+    before.resize(length);
+    memcpy(&before[0], initialContent, length);
+    
+    // seek end:
+    for (int i = 0; i < length; i++)
+    {
+        if (before[i] == newline)
+        {
+            currentLine++;
+            currentCol = 0;
+        }
+        else
+        {
+            currentCol++;
+        }
+    }
+
+    //InsertAtCursor(initialContent, length);
 }
 
 std::string_view GapBuffer::GetStringView(int start, int length)
@@ -183,20 +200,31 @@ TSInputEdit perform_edit(char* input, uint32_t editPosition, uint32_t deletedLen
 
 
 
-
 TSInputEdit GapBuffer::Edit(int line, int col, int endLine, int endCol, const char* content, int contentLength, int rangeLength)
 {
-    auto text = Copy();
-
     Seek(line, col);
 
-    /*
     TSInputEdit edit;
     edit.start_byte = GetOffset();
     edit.start_point = { .row = static_cast<uint32_t>(line), .column = static_cast<uint32_t>(col) };
     edit.old_end_byte = edit.start_byte + rangeLength;
     edit.old_end_point = { .row = static_cast<uint32_t>(endLine), .column = static_cast<uint32_t>(endCol) };
-    */
+
+    after.resize(after.size() - rangeLength);
+
+    InsertAtCursor(content, contentLength);
+    edit.new_end_byte = edit.start_byte + contentLength;
+    edit.new_end_point = { .row = static_cast<uint32_t>(currentLine), .column = static_cast<uint32_t>(currentCol) };
+
+    return edit;
+}
+
+/*
+TSInputEdit GapBuffer::Edit(int line, int col, int endLine, int endCol, const char* content, int contentLength, int rangeLength)
+{
+    auto text = Copy();
+
+    Seek(line, col);
 
     auto start_byte = GetOffset();
     auto old_end_byte = GetOffset() + rangeLength;
@@ -229,6 +257,7 @@ TSInputEdit GapBuffer::Edit(int line, int col, int endLine, int endCol, const ch
 
     return edit;
 }
+*/
 
 uint32_t GapBuffer::GetOffset()
 {
@@ -270,7 +299,7 @@ void GapBuffer::PrintContents()
     return storage;
 }
 
-buffer_view::buffer_view(int start, int end, GapBuffer* buffer)
+buffer_view::buffer_view(int start, int end, const GapBuffer* buffer)
 {
     this->start = start;
     this->length = end - start;
