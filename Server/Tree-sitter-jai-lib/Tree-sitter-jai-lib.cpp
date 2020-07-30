@@ -421,11 +421,13 @@ export long long CreateTree(const char* documentPath, const char* code, int leng
 	
 	auto fileScope = g_fileScopes.Read(documentHash).value();
 	
+	/*
 	for (auto load : fileScope->loads)
 	{
 		HandleLoad(load);
 	}
-	
+	*/
+
 	return timer.GetMicroseconds();
 }
 
