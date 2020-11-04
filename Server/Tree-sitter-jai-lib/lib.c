@@ -17,5 +17,3 @@
 #include "./subtree.c"
 #include "./tree_cursor.c"
 #include "./tree.c"
-
-#pragma warning(pop)

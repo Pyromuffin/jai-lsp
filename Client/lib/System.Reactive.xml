@@ -7000,6 +7000,42 @@
             <returns>An observable sequence that stays connected to the source as long as there is at least one subscription to the observable sequence.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="source"/> is null.</exception>
         </member>
+        <member name="M:System.Reactive.Linq.Observable.RefCount``1(System.Reactive.Subjects.IConnectableObservable{``0},System.Int32)">
+            <summary>
+            Returns an observable sequence that stays connected to the source as long as there is at least one subscription to the observable sequence.
+            </summary>
+            <typeparam name="TSource">The type of the elements in the source sequence.</typeparam>
+            <param name="source">Connectable observable sequence.</param>
+            <param name="minObservers">The minimum number of observers required to subscribe before establishing the connection to the source.</param>
+            <returns>An observable sequence that stays connected to the source as long as there is at least one subscription to the observable sequence.</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="source"/> is null.</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException"><paramref name="minObservers"/> is non-positive.</exception>
+        </member>
+        <member name="M:System.Reactive.Linq.Observable.RefCount``1(System.Reactive.Subjects.IConnectableObservable{``0},System.Int32,System.TimeSpan)">
+            <summary>
+            Returns an observable sequence that stays connected to the source as long as there is at least one subscription to the observable sequence.
+            </summary>
+            <typeparam name="TSource">The type of the elements in the source sequence.</typeparam>
+            <param name="source">Connectable observable sequence.</param>
+            <param name="minObservers">The minimum number of observers required to subscribe before establishing the connection to the source.</param>
+            <param name="disconnectDelay">The time span that should be waited before possibly unsubscribing from the connectable observable.</param>
+            <returns>An observable sequence that stays connected to the source as long as there is at least one subscription to the observable sequence.</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="source"/> is null.</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException"><paramref name="minObservers"/> is non-positive.</exception>
+        </member>
+        <member name="M:System.Reactive.Linq.Observable.RefCount``1(System.Reactive.Subjects.IConnectableObservable{``0},System.Int32,System.TimeSpan,System.Reactive.Concurrency.IScheduler)">
+            <summary>
+            Returns an observable sequence that stays connected to the source as long as there is at least one subscription to the observable sequence.
+            </summary>
+            <typeparam name="TSource">The type of the elements in the source sequence.</typeparam>
+            <param name="source">Connectable observable sequence.</param>
+            <param name="minObservers">The minimum number of observers required to subscribe before establishing the connection to the source.</param>
+            <param name="disconnectDelay">The time span that should be waited before possibly unsubscribing from the connectable observable.</param>
+            <param name="scheduler">The scheduler to use for delayed unsubscription.</param>
+            <returns>An observable sequence that stays connected to the source as long as there is at least one subscription to the observable sequence.</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="source"/> is null.</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException"><paramref name="minObservers"/> is non-positive.</exception>
+        </member>
         <member name="M:System.Reactive.Linq.Observable.AutoConnect``1(System.Reactive.Subjects.IConnectableObservable{``0},System.Int32,System.Action{System.IDisposable})">
             <summary>
             Automatically connect the upstream IConnectableObservable at most once when the
@@ -9233,6 +9269,7 @@
             <param name="resultSelector">Function to invoke whenever either of the sources produces an element.</param>
             <returns>An observable sequence containing the result of combining elements of both sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="first"/> or <paramref name="second"/> or <paramref name="resultSelector"/> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Observable.CombineLatest``4(System.IObservable{``0},System.IObservable{``1},System.IObservable{``2},System.Func{``0,``1,``2,``3})">
             <summary>
@@ -9248,6 +9285,7 @@
             <param name="resultSelector">Function to invoke whenever any of the sources produces an element.</param>
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="source1"/> or <paramref name="source2"/> or <paramref name="source3"/> or <paramref name="resultSelector"/> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Observable.CombineLatest``5(System.IObservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.Func{``0,``1,``2,``3,``4})">
             <summary>
@@ -9265,6 +9303,7 @@
             <param name="resultSelector">Function to invoke whenever any of the sources produces an element.</param>
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="source1"/> or <paramref name="source2"/> or <paramref name="source3"/> or <paramref name="source4"/> or <paramref name="resultSelector"/> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Observable.CombineLatest``6(System.IObservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.Func{``0,``1,``2,``3,``4,``5})">
             <summary>
@@ -9284,6 +9323,7 @@
             <param name="resultSelector">Function to invoke whenever any of the sources produces an element.</param>
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="source1"/> or <paramref name="source2"/> or <paramref name="source3"/> or <paramref name="source4"/> or <paramref name="source5"/> or <paramref name="resultSelector"/> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Observable.CombineLatest``7(System.IObservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.Func{``0,``1,``2,``3,``4,``5,``6})">
             <summary>
@@ -9305,6 +9345,7 @@
             <param name="resultSelector">Function to invoke whenever any of the sources produces an element.</param>
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="source1"/> or <paramref name="source2"/> or <paramref name="source3"/> or <paramref name="source4"/> or <paramref name="source5"/> or <paramref name="source6"/> or <paramref name="resultSelector"/> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Observable.CombineLatest``8(System.IObservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.IObservable{``6},System.Func{``0,``1,``2,``3,``4,``5,``6,``7})">
             <summary>
@@ -9328,6 +9369,7 @@
             <param name="resultSelector">Function to invoke whenever any of the sources produces an element.</param>
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="source1"/> or <paramref name="source2"/> or <paramref name="source3"/> or <paramref name="source4"/> or <paramref name="source5"/> or <paramref name="source6"/> or <paramref name="source7"/> or <paramref name="resultSelector"/> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Observable.CombineLatest``9(System.IObservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.IObservable{``6},System.IObservable{``7},System.Func{``0,``1,``2,``3,``4,``5,``6,``7,``8})">
             <summary>
@@ -9353,6 +9395,7 @@
             <param name="resultSelector">Function to invoke whenever any of the sources produces an element.</param>
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="source1"/> or <paramref name="source2"/> or <paramref name="source3"/> or <paramref name="source4"/> or <paramref name="source5"/> or <paramref name="source6"/> or <paramref name="source7"/> or <paramref name="source8"/> or <paramref name="resultSelector"/> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Observable.CombineLatest``10(System.IObservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.IObservable{``6},System.IObservable{``7},System.IObservable{``8},System.Func{``0,``1,``2,``3,``4,``5,``6,``7,``8,``9})">
             <summary>
@@ -9380,6 +9423,7 @@
             <param name="resultSelector">Function to invoke whenever any of the sources produces an element.</param>
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="source1"/> or <paramref name="source2"/> or <paramref name="source3"/> or <paramref name="source4"/> or <paramref name="source5"/> or <paramref name="source6"/> or <paramref name="source7"/> or <paramref name="source8"/> or <paramref name="source9"/> or <paramref name="resultSelector"/> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Observable.CombineLatest``11(System.IObservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.IObservable{``6},System.IObservable{``7},System.IObservable{``8},System.IObservable{``9},System.Func{``0,``1,``2,``3,``4,``5,``6,``7,``8,``9,``10})">
             <summary>
@@ -9409,6 +9453,7 @@
             <param name="resultSelector">Function to invoke whenever any of the sources produces an element.</param>
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="source1"/> or <paramref name="source2"/> or <paramref name="source3"/> or <paramref name="source4"/> or <paramref name="source5"/> or <paramref name="source6"/> or <paramref name="source7"/> or <paramref name="source8"/> or <paramref name="source9"/> or <paramref name="source10"/> or <paramref name="resultSelector"/> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Observable.CombineLatest``12(System.IObservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.IObservable{``6},System.IObservable{``7},System.IObservable{``8},System.IObservable{``9},System.IObservable{``10},System.Func{``0,``1,``2,``3,``4,``5,``6,``7,``8,``9,``10,``11})">
             <summary>
@@ -9440,6 +9485,7 @@
             <param name="resultSelector">Function to invoke whenever any of the sources produces an element.</param>
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="source1"/> or <paramref name="source2"/> or <paramref name="source3"/> or <paramref name="source4"/> or <paramref name="source5"/> or <paramref name="source6"/> or <paramref name="source7"/> or <paramref name="source8"/> or <paramref name="source9"/> or <paramref name="source10"/> or <paramref name="source11"/> or <paramref name="resultSelector"/> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Observable.CombineLatest``13(System.IObservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.IObservable{``6},System.IObservable{``7},System.IObservable{``8},System.IObservable{``9},System.IObservable{``10},System.IObservable{``11},System.Func{``0,``1,``2,``3,``4,``5,``6,``7,``8,``9,``10,``11,``12})">
             <summary>
@@ -9473,6 +9519,7 @@
             <param name="resultSelector">Function to invoke whenever any of the sources produces an element.</param>
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="source1"/> or <paramref name="source2"/> or <paramref name="source3"/> or <paramref name="source4"/> or <paramref name="source5"/> or <paramref name="source6"/> or <paramref name="source7"/> or <paramref name="source8"/> or <paramref name="source9"/> or <paramref name="source10"/> or <paramref name="source11"/> or <paramref name="source12"/> or <paramref name="resultSelector"/> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Observable.CombineLatest``14(System.IObservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.IObservable{``6},System.IObservable{``7},System.IObservable{``8},System.IObservable{``9},System.IObservable{``10},System.IObservable{``11},System.IObservable{``12},System.Func{``0,``1,``2,``3,``4,``5,``6,``7,``8,``9,``10,``11,``12,``13})">
             <summary>
@@ -9508,6 +9555,7 @@
             <param name="resultSelector">Function to invoke whenever any of the sources produces an element.</param>
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="source1"/> or <paramref name="source2"/> or <paramref name="source3"/> or <paramref name="source4"/> or <paramref name="source5"/> or <paramref name="source6"/> or <paramref name="source7"/> or <paramref name="source8"/> or <paramref name="source9"/> or <paramref name="source10"/> or <paramref name="source11"/> or <paramref name="source12"/> or <paramref name="source13"/> or <paramref name="resultSelector"/> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Observable.CombineLatest``15(System.IObservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.IObservable{``6},System.IObservable{``7},System.IObservable{``8},System.IObservable{``9},System.IObservable{``10},System.IObservable{``11},System.IObservable{``12},System.IObservable{``13},System.Func{``0,``1,``2,``3,``4,``5,``6,``7,``8,``9,``10,``11,``12,``13,``14})">
             <summary>
@@ -9545,6 +9593,7 @@
             <param name="resultSelector">Function to invoke whenever any of the sources produces an element.</param>
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="source1"/> or <paramref name="source2"/> or <paramref name="source3"/> or <paramref name="source4"/> or <paramref name="source5"/> or <paramref name="source6"/> or <paramref name="source7"/> or <paramref name="source8"/> or <paramref name="source9"/> or <paramref name="source10"/> or <paramref name="source11"/> or <paramref name="source12"/> or <paramref name="source13"/> or <paramref name="source14"/> or <paramref name="resultSelector"/> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Observable.CombineLatest``16(System.IObservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.IObservable{``6},System.IObservable{``7},System.IObservable{``8},System.IObservable{``9},System.IObservable{``10},System.IObservable{``11},System.IObservable{``12},System.IObservable{``13},System.IObservable{``14},System.Func{``0,``1,``2,``3,``4,``5,``6,``7,``8,``9,``10,``11,``12,``13,``14,``15})">
             <summary>
@@ -9584,6 +9633,7 @@
             <param name="resultSelector">Function to invoke whenever any of the sources produces an element.</param>
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="source1"/> or <paramref name="source2"/> or <paramref name="source3"/> or <paramref name="source4"/> or <paramref name="source5"/> or <paramref name="source6"/> or <paramref name="source7"/> or <paramref name="source8"/> or <paramref name="source9"/> or <paramref name="source10"/> or <paramref name="source11"/> or <paramref name="source12"/> or <paramref name="source13"/> or <paramref name="source14"/> or <paramref name="source15"/> or <paramref name="resultSelector"/> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Observable.CombineLatest``17(System.IObservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.IObservable{``6},System.IObservable{``7},System.IObservable{``8},System.IObservable{``9},System.IObservable{``10},System.IObservable{``11},System.IObservable{``12},System.IObservable{``13},System.IObservable{``14},System.IObservable{``15},System.Func{``0,``1,``2,``3,``4,``5,``6,``7,``8,``9,``10,``11,``12,``13,``14,``15,``16})">
             <summary>
@@ -9625,6 +9675,7 @@
             <param name="resultSelector">Function to invoke whenever any of the sources produces an element.</param>
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="source1"/> or <paramref name="source2"/> or <paramref name="source3"/> or <paramref name="source4"/> or <paramref name="source5"/> or <paramref name="source6"/> or <paramref name="source7"/> or <paramref name="source8"/> or <paramref name="source9"/> or <paramref name="source10"/> or <paramref name="source11"/> or <paramref name="source12"/> or <paramref name="source13"/> or <paramref name="source14"/> or <paramref name="source15"/> or <paramref name="source16"/> or <paramref name="resultSelector"/> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Observable.CombineLatest``2(System.Collections.Generic.IEnumerable{System.IObservable{``0}},System.Func{System.Collections.Generic.IList{``0},``1})">
             <summary>
@@ -9636,6 +9687,7 @@
             <param name="resultSelector">Function to invoke whenever any of the sources produces an element. For efficiency, the input list is reused after the selector returns. Either aggregate or copy the values during the function call.</param>
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="sources"/> or <paramref name="resultSelector"/> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Observable.CombineLatest``1(System.Collections.Generic.IEnumerable{System.IObservable{``0}})">
             <summary>
@@ -9645,6 +9697,7 @@
             <param name="sources">Observable sources.</param>
             <returns>An observable sequence containing lists of the latest elements of the sources.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="sources"/> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Observable.CombineLatest``1(System.IObservable{``0}[])">
             <summary>
@@ -9654,6 +9707,7 @@
             <param name="sources">Observable sources.</param>
             <returns>An observable sequence containing lists of the latest elements of the sources.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="sources"/> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Observable.Concat``1(System.IObservable{``0},System.IObservable{``0})">
             <summary>
@@ -13604,6 +13658,7 @@
             <returns>An observable sequence containing lists of the latest elements of the sources.</returns>
             <exception cref="T:System.ArgumentNullException">
             <paramref name="sources" /> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Qbservable.CombineLatest``1(System.Reactive.Linq.IQbservableProvider,System.IObservable{``0}[])">
             <summary>
@@ -13615,6 +13670,7 @@
             <returns>An observable sequence containing lists of the latest elements of the sources.</returns>
             <exception cref="T:System.ArgumentNullException">
             <paramref name="sources" /> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Qbservable.CombineLatest``2(System.Reactive.Linq.IQbservableProvider,System.Collections.Generic.IEnumerable{System.IObservable{``0}},System.Linq.Expressions.Expression{System.Func{System.Collections.Generic.IList{``0},``1}})">
             <summary>
@@ -13628,6 +13684,7 @@
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException">
             <paramref name="sources" /> or <paramref name="resultSelector" /> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Qbservable.CombineLatest``3(System.Reactive.Linq.IQbservable{``0},System.IObservable{``1},System.Linq.Expressions.Expression{System.Func{``0,``1,``2}})">
             <summary>
@@ -13642,6 +13699,7 @@
             <returns>An observable sequence containing the result of combining elements of both sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException">
             <paramref name="first" /> or <paramref name="second" /> or <paramref name="resultSelector" /> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Qbservable.CombineLatest``4(System.Reactive.Linq.IQbservable{``0},System.IObservable{``1},System.IObservable{``2},System.Linq.Expressions.Expression{System.Func{``0,``1,``2,``3}})">
             <summary>
@@ -13658,6 +13716,7 @@
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException">
             <paramref name="source1" /> or <paramref name="source2" /> or <paramref name="source3" /> or <paramref name="resultSelector" /> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Qbservable.CombineLatest``5(System.Reactive.Linq.IQbservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.Linq.Expressions.Expression{System.Func{``0,``1,``2,``3,``4}})">
             <summary>
@@ -13676,6 +13735,7 @@
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException">
             <paramref name="source1" /> or <paramref name="source2" /> or <paramref name="source3" /> or <paramref name="source4" /> or <paramref name="resultSelector" /> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Qbservable.CombineLatest``6(System.Reactive.Linq.IQbservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.Linq.Expressions.Expression{System.Func{``0,``1,``2,``3,``4,``5}})">
             <summary>
@@ -13696,6 +13756,7 @@
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException">
             <paramref name="source1" /> or <paramref name="source2" /> or <paramref name="source3" /> or <paramref name="source4" /> or <paramref name="source5" /> or <paramref name="resultSelector" /> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Qbservable.CombineLatest``7(System.Reactive.Linq.IQbservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.Linq.Expressions.Expression{System.Func{``0,``1,``2,``3,``4,``5,``6}})">
             <summary>
@@ -13718,6 +13779,7 @@
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException">
             <paramref name="source1" /> or <paramref name="source2" /> or <paramref name="source3" /> or <paramref name="source4" /> or <paramref name="source5" /> or <paramref name="source6" /> or <paramref name="resultSelector" /> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Qbservable.CombineLatest``8(System.Reactive.Linq.IQbservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.IObservable{``6},System.Linq.Expressions.Expression{System.Func{``0,``1,``2,``3,``4,``5,``6,``7}})">
             <summary>
@@ -13742,6 +13804,7 @@
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException">
             <paramref name="source1" /> or <paramref name="source2" /> or <paramref name="source3" /> or <paramref name="source4" /> or <paramref name="source5" /> or <paramref name="source6" /> or <paramref name="source7" /> or <paramref name="resultSelector" /> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Qbservable.CombineLatest``9(System.Reactive.Linq.IQbservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.IObservable{``6},System.IObservable{``7},System.Linq.Expressions.Expression{System.Func{``0,``1,``2,``3,``4,``5,``6,``7,``8}})">
             <summary>
@@ -13768,6 +13831,7 @@
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException">
             <paramref name="source1" /> or <paramref name="source2" /> or <paramref name="source3" /> or <paramref name="source4" /> or <paramref name="source5" /> or <paramref name="source6" /> or <paramref name="source7" /> or <paramref name="source8" /> or <paramref name="resultSelector" /> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Qbservable.CombineLatest``10(System.Reactive.Linq.IQbservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.IObservable{``6},System.IObservable{``7},System.IObservable{``8},System.Linq.Expressions.Expression{System.Func{``0,``1,``2,``3,``4,``5,``6,``7,``8,``9}})">
             <summary>
@@ -13796,6 +13860,7 @@
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException">
             <paramref name="source1" /> or <paramref name="source2" /> or <paramref name="source3" /> or <paramref name="source4" /> or <paramref name="source5" /> or <paramref name="source6" /> or <paramref name="source7" /> or <paramref name="source8" /> or <paramref name="source9" /> or <paramref name="resultSelector" /> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Qbservable.CombineLatest``11(System.Reactive.Linq.IQbservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.IObservable{``6},System.IObservable{``7},System.IObservable{``8},System.IObservable{``9},System.Linq.Expressions.Expression{System.Func{``0,``1,``2,``3,``4,``5,``6,``7,``8,``9,``10}})">
             <summary>
@@ -13826,6 +13891,7 @@
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException">
             <paramref name="source1" /> or <paramref name="source2" /> or <paramref name="source3" /> or <paramref name="source4" /> or <paramref name="source5" /> or <paramref name="source6" /> or <paramref name="source7" /> or <paramref name="source8" /> or <paramref name="source9" /> or <paramref name="source10" /> or <paramref name="resultSelector" /> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Qbservable.CombineLatest``12(System.Reactive.Linq.IQbservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.IObservable{``6},System.IObservable{``7},System.IObservable{``8},System.IObservable{``9},System.IObservable{``10},System.Linq.Expressions.Expression{System.Func{``0,``1,``2,``3,``4,``5,``6,``7,``8,``9,``10,``11}})">
             <summary>
@@ -13858,6 +13924,7 @@
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException">
             <paramref name="source1" /> or <paramref name="source2" /> or <paramref name="source3" /> or <paramref name="source4" /> or <paramref name="source5" /> or <paramref name="source6" /> or <paramref name="source7" /> or <paramref name="source8" /> or <paramref name="source9" /> or <paramref name="source10" /> or <paramref name="source11" /> or <paramref name="resultSelector" /> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Qbservable.CombineLatest``13(System.Reactive.Linq.IQbservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.IObservable{``6},System.IObservable{``7},System.IObservable{``8},System.IObservable{``9},System.IObservable{``10},System.IObservable{``11},System.Linq.Expressions.Expression{System.Func{``0,``1,``2,``3,``4,``5,``6,``7,``8,``9,``10,``11,``12}})">
             <summary>
@@ -13892,6 +13959,7 @@
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException">
             <paramref name="source1" /> or <paramref name="source2" /> or <paramref name="source3" /> or <paramref name="source4" /> or <paramref name="source5" /> or <paramref name="source6" /> or <paramref name="source7" /> or <paramref name="source8" /> or <paramref name="source9" /> or <paramref name="source10" /> or <paramref name="source11" /> or <paramref name="source12" /> or <paramref name="resultSelector" /> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Qbservable.CombineLatest``14(System.Reactive.Linq.IQbservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.IObservable{``6},System.IObservable{``7},System.IObservable{``8},System.IObservable{``9},System.IObservable{``10},System.IObservable{``11},System.IObservable{``12},System.Linq.Expressions.Expression{System.Func{``0,``1,``2,``3,``4,``5,``6,``7,``8,``9,``10,``11,``12,``13}})">
             <summary>
@@ -13928,6 +13996,7 @@
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException">
             <paramref name="source1" /> or <paramref name="source2" /> or <paramref name="source3" /> or <paramref name="source4" /> or <paramref name="source5" /> or <paramref name="source6" /> or <paramref name="source7" /> or <paramref name="source8" /> or <paramref name="source9" /> or <paramref name="source10" /> or <paramref name="source11" /> or <paramref name="source12" /> or <paramref name="source13" /> or <paramref name="resultSelector" /> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Qbservable.CombineLatest``15(System.Reactive.Linq.IQbservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.IObservable{``6},System.IObservable{``7},System.IObservable{``8},System.IObservable{``9},System.IObservable{``10},System.IObservable{``11},System.IObservable{``12},System.IObservable{``13},System.Linq.Expressions.Expression{System.Func{``0,``1,``2,``3,``4,``5,``6,``7,``8,``9,``10,``11,``12,``13,``14}})">
             <summary>
@@ -13966,6 +14035,7 @@
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException">
             <paramref name="source1" /> or <paramref name="source2" /> or <paramref name="source3" /> or <paramref name="source4" /> or <paramref name="source5" /> or <paramref name="source6" /> or <paramref name="source7" /> or <paramref name="source8" /> or <paramref name="source9" /> or <paramref name="source10" /> or <paramref name="source11" /> or <paramref name="source12" /> or <paramref name="source13" /> or <paramref name="source14" /> or <paramref name="resultSelector" /> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Qbservable.CombineLatest``16(System.Reactive.Linq.IQbservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.IObservable{``6},System.IObservable{``7},System.IObservable{``8},System.IObservable{``9},System.IObservable{``10},System.IObservable{``11},System.IObservable{``12},System.IObservable{``13},System.IObservable{``14},System.Linq.Expressions.Expression{System.Func{``0,``1,``2,``3,``4,``5,``6,``7,``8,``9,``10,``11,``12,``13,``14,``15}})">
             <summary>
@@ -14006,6 +14076,7 @@
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException">
             <paramref name="source1" /> or <paramref name="source2" /> or <paramref name="source3" /> or <paramref name="source4" /> or <paramref name="source5" /> or <paramref name="source6" /> or <paramref name="source7" /> or <paramref name="source8" /> or <paramref name="source9" /> or <paramref name="source10" /> or <paramref name="source11" /> or <paramref name="source12" /> or <paramref name="source13" /> or <paramref name="source14" /> or <paramref name="source15" /> or <paramref name="resultSelector" /> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Qbservable.CombineLatest``17(System.Reactive.Linq.IQbservable{``0},System.IObservable{``1},System.IObservable{``2},System.IObservable{``3},System.IObservable{``4},System.IObservable{``5},System.IObservable{``6},System.IObservable{``7},System.IObservable{``8},System.IObservable{``9},System.IObservable{``10},System.IObservable{``11},System.IObservable{``12},System.IObservable{``13},System.IObservable{``14},System.IObservable{``15},System.Linq.Expressions.Expression{System.Func{``0,``1,``2,``3,``4,``5,``6,``7,``8,``9,``10,``11,``12,``13,``14,``15,``16}})">
             <summary>
@@ -14048,6 +14119,7 @@
             <returns>An observable sequence containing the result of combining elements of the sources using the specified result selector function.</returns>
             <exception cref="T:System.ArgumentNullException">
             <paramref name="source1" /> or <paramref name="source2" /> or <paramref name="source3" /> or <paramref name="source4" /> or <paramref name="source5" /> or <paramref name="source6" /> or <paramref name="source7" /> or <paramref name="source8" /> or <paramref name="source9" /> or <paramref name="source10" /> or <paramref name="source11" /> or <paramref name="source12" /> or <paramref name="source13" /> or <paramref name="source14" /> or <paramref name="source15" /> or <paramref name="source16" /> or <paramref name="resultSelector" /> is null.</exception>
+            <remarks>If a non-empty source completes, its very last value will be used for creating subsequent combinations until all sources terminate.</remarks>
         </member>
         <member name="M:System.Reactive.Linq.Qbservable.Concat``1(System.Reactive.Linq.IQbservable{``0},System.IObservable{``0})">
             <summary>
@@ -17541,6 +17613,48 @@
             <returns>An observable sequence that stays connected to the source as long as there is at least one subscription to the observable sequence.</returns>
             <exception cref="T:System.ArgumentNullException">
             <paramref name="source" /> is null.</exception>
+        </member>
+        <member name="M:System.Reactive.Linq.Qbservable.RefCount``1(System.Reactive.Linq.IQbservableProvider,System.Reactive.Subjects.IConnectableObservable{``0},System.Int32)">
+            <summary>
+            Returns an observable sequence that stays connected to the source as long as there is at least one subscription to the observable sequence.
+            </summary>
+            <param name="provider">Query provider used to construct the <see cref="T:System.Reactive.Linq.IQbservable`1"/> data source.</param>
+            <typeparam name="TSource">The type of the elements in the source sequence.</typeparam>
+            <param name="source">Connectable observable sequence.</param>
+            <param name="minObservers">The minimum number of observers required to subscribe before establishing the connection to the source.</param>
+            <returns>An observable sequence that stays connected to the source as long as there is at least one subscription to the observable sequence.</returns>
+            <exception cref="T:System.ArgumentNullException">
+            <paramref name="source" /> is null.</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException"><paramref name="minObservers"/> is non-positive.</exception>
+        </member>
+        <member name="M:System.Reactive.Linq.Qbservable.RefCount``1(System.Reactive.Linq.IQbservableProvider,System.Reactive.Subjects.IConnectableObservable{``0},System.Int32,System.TimeSpan)">
+            <summary>
+            Returns an observable sequence that stays connected to the source as long as there is at least one subscription to the observable sequence.
+            </summary>
+            <param name="provider">Query provider used to construct the <see cref="T:System.Reactive.Linq.IQbservable`1"/> data source.</param>
+            <typeparam name="TSource">The type of the elements in the source sequence.</typeparam>
+            <param name="source">Connectable observable sequence.</param>
+            <param name="minObservers">The minimum number of observers required to subscribe before establishing the connection to the source.</param>
+            <param name="disconnectDelay">The time span that should be waited before possibly unsubscribing from the connectable observable.</param>
+            <returns>An observable sequence that stays connected to the source as long as there is at least one subscription to the observable sequence.</returns>
+            <exception cref="T:System.ArgumentNullException">
+            <paramref name="source" /> is null.</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException"><paramref name="minObservers"/> is non-positive.</exception>
+        </member>
+        <member name="M:System.Reactive.Linq.Qbservable.RefCount``1(System.Reactive.Linq.IQbservableProvider,System.Reactive.Subjects.IConnectableObservable{``0},System.Int32,System.TimeSpan,System.Reactive.Concurrency.IScheduler)">
+            <summary>
+            Returns an observable sequence that stays connected to the source as long as there is at least one subscription to the observable sequence.
+            </summary>
+            <param name="provider">Query provider used to construct the <see cref="T:System.Reactive.Linq.IQbservable`1"/> data source.</param>
+            <typeparam name="TSource">The type of the elements in the source sequence.</typeparam>
+            <param name="source">Connectable observable sequence.</param>
+            <param name="minObservers">The minimum number of observers required to subscribe before establishing the connection to the source.</param>
+            <param name="disconnectDelay">The time span that should be waited before possibly unsubscribing from the connectable observable.</param>
+            <param name="scheduler">The scheduler to use for delayed unsubscription.</param>
+            <returns>An observable sequence that stays connected to the source as long as there is at least one subscription to the observable sequence.</returns>
+            <exception cref="T:System.ArgumentNullException">
+            <paramref name="source" /> is null.</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException"><paramref name="minObservers"/> is non-positive.</exception>
         </member>
         <member name="M:System.Reactive.Linq.Qbservable.Repeat``1(System.Reactive.Linq.IQbservableProvider,``0)">
             <summary>
@@ -25948,6 +26062,16 @@
             <returns>A task that will receive the last element or the exception produced by the observable sequence.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="observable"/> is <c>null</c>.</exception>
         </member>
+        <member name="M:System.Reactive.Threading.Tasks.TaskObservableExtensions.ToTask``1(System.IObservable{``0},System.Reactive.Concurrency.IScheduler)">
+            <summary>
+            Returns a task that will receive the last value or the exception produced by the observable sequence.
+            </summary>
+            <typeparam name="TResult">The type of the elements in the source sequence.</typeparam>
+            <param name="observable">Observable sequence to convert to a task.</param>
+            <param name="scheduler">The scheduler used for overriding where the task completion signals will be issued.</param>
+            <returns>A task that will receive the last element or the exception produced by the observable sequence.</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="observable"/> or <paramref name="scheduler"/> is <c>null</c>.</exception>
+        </member>
         <member name="M:System.Reactive.Threading.Tasks.TaskObservableExtensions.ToTask``1(System.IObservable{``0},System.Object)">
             <summary>
             Returns a task that will receive the last value or the exception produced by the observable sequence.
@@ -25957,6 +26081,17 @@
             <param name="state">The state to use as the underlying task's AsyncState.</param>
             <returns>A task that will receive the last element or the exception produced by the observable sequence.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="observable"/> is <c>null</c>.</exception>
+        </member>
+        <member name="M:System.Reactive.Threading.Tasks.TaskObservableExtensions.ToTask``1(System.IObservable{``0},System.Object,System.Reactive.Concurrency.IScheduler)">
+            <summary>
+            Returns a task that will receive the last value or the exception produced by the observable sequence.
+            </summary>
+            <typeparam name="TResult">The type of the elements in the source sequence.</typeparam>
+            <param name="observable">Observable sequence to convert to a task.</param>
+            <param name="state">The state to use as the underlying task's AsyncState.</param>
+            <param name="scheduler">The scheduler used for overriding where the task completion signals will be issued.</param>
+            <returns>A task that will receive the last element or the exception produced by the observable sequence.</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="observable"/> or <paramref name="scheduler"/> is <c>null</c>.</exception>
         </member>
         <member name="M:System.Reactive.Threading.Tasks.TaskObservableExtensions.ToTask``1(System.IObservable{``0},System.Threading.CancellationToken)">
             <summary>
@@ -25968,6 +26103,17 @@
             <returns>A task that will receive the last element or the exception produced by the observable sequence.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="observable"/> is <c>null</c>.</exception>
         </member>
+        <member name="M:System.Reactive.Threading.Tasks.TaskObservableExtensions.ToTask``1(System.IObservable{``0},System.Threading.CancellationToken,System.Reactive.Concurrency.IScheduler)">
+            <summary>
+            Returns a task that will receive the last value or the exception produced by the observable sequence.
+            </summary>
+            <typeparam name="TResult">The type of the elements in the source sequence.</typeparam>
+            <param name="observable">Observable sequence to convert to a task.</param>
+            <param name="cancellationToken">Cancellation token that can be used to cancel the task, causing unsubscription from the observable sequence.</param>
+            <param name="scheduler">The scheduler used for overriding where the task completion signals will be issued.</param>
+            <returns>A task that will receive the last element or the exception produced by the observable sequence.</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="observable"/> or <paramref name="scheduler"/> is <c>null</c>.</exception>
+        </member>
         <member name="M:System.Reactive.Threading.Tasks.TaskObservableExtensions.ToTask``1(System.IObservable{``0},System.Threading.CancellationToken,System.Object)">
             <summary>
             Returns a task that will receive the last value or the exception produced by the observable sequence.
@@ -25978,6 +26124,18 @@
             <param name="state">The state to use as the underlying task's <see cref="P:System.Threading.Tasks.Task.AsyncState"/>.</param>
             <returns>A task that will receive the last element or the exception produced by the observable sequence.</returns>
             <exception cref="T:System.ArgumentNullException"><paramref name="observable"/> is <c>null</c>.</exception>
+        </member>
+        <member name="M:System.Reactive.Threading.Tasks.TaskObservableExtensions.ToTask``1(System.IObservable{``0},System.Threading.CancellationToken,System.Object,System.Reactive.Concurrency.IScheduler)">
+            <summary>
+            Returns a task that will receive the last value or the exception produced by the observable sequence.
+            </summary>
+            <typeparam name="TResult">The type of the elements in the source sequence.</typeparam>
+            <param name="observable">Observable sequence to convert to a task.</param>
+            <param name="cancellationToken">Cancellation token that can be used to cancel the task, causing unsubscription from the observable sequence.</param>
+            <param name="state">The state to use as the underlying task's <see cref="P:System.Threading.Tasks.Task.AsyncState"/>.</param>
+            <param name="scheduler">The scheduler used for overriding where the task completion signals will be issued.</param>
+            <returns>A task that will receive the last element or the exception produced by the observable sequence.</returns>
+            <exception cref="T:System.ArgumentNullException"><paramref name="observable"/> or <paramref name="scheduler"/> is <c>null</c>.</exception>
         </member>
         <member name="T:System.Reactive.TimeInterval`1">
             <summary>

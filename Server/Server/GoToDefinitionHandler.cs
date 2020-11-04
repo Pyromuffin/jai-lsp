@@ -1,16 +1,16 @@
-﻿using MediatR;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
+using OmniSharp.Extensions.LanguageServer.Protocol.Document;
+using OmniSharp.Extensions.LanguageServer.Protocol.Document.Proposals;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
-using OmniSharp.Extensions.LanguageServer.Protocol.Server;
-using System;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models.Proposals;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace jai_lsp
 {
-    class Definer: IDefinitionHandler
+    class Definer: DefinitionHandler
     {
         HashNamer hashNamer;
         ILogger _logger;
@@ -23,19 +23,15 @@ namespace jai_lsp
         );
 
 
-        public Definer(ILogger<TextDocumentHandler> logger, HashNamer hashNamer)
+        public Definer(ILogger<TextDocumentHandler> logger, HashNamer hashNamer, DefinitionRegistrationOptions options) : base (options)
         {
             _logger = logger;
             this.hashNamer = hashNamer;
-        }
-
-        public DefinitionRegistrationOptions GetRegistrationOptions()
-        {
-            var options = new DefinitionRegistrationOptions();
             options.DocumentSelector = _documentSelector;
             options.WorkDoneProgress = false;
-            return options;
         }
+
+       
 
         OmniSharp.Extensions.LanguageServer.Protocol.Models.Range ConvertRange(Range range)
         {
@@ -51,7 +47,7 @@ namespace jai_lsp
             return r;
         }
 
-        public Task<LocationOrLocationLinks> Handle(DefinitionParams request, CancellationToken cancellationToken)
+        public override Task<LocationOrLocationLinks> Handle(DefinitionParams request, CancellationToken cancellationToken)
         {
             var hash = Hash.StringHash(request.TextDocument.Uri.GetFileSystemPath());
             TreeSitter.FindDefinition(hash, request.Position.Line, request.Position.Character, out var defHash, out var origin, out var target, out var selection);
@@ -70,13 +66,15 @@ namespace jai_lsp
             return Task.FromResult(new LocationOrLocationLinks());
         }
 
-        public void SetCapability(DefinitionCapability capability)
+        public override void SetCapability(DefinitionCapability capability)
         {
+            capability.LinkSupport = true;
         }
+ 
     }
 
 
-    class Hoverer : IHoverHandler
+    class Hoverer : HoverHandler
     {
 
         private readonly DocumentSelector _documentSelector = new DocumentSelector(
@@ -86,15 +84,14 @@ namespace jai_lsp
             }
         );
 
-        public HoverRegistrationOptions GetRegistrationOptions()
+        public Hoverer(HoverRegistrationOptions options) : base(options)
         {
-            var options = new HoverRegistrationOptions();
             options.DocumentSelector = _documentSelector;
             options.WorkDoneProgress = false;
-            return options;
         }
 
-        public Task<Hover> Handle(HoverParams request, CancellationToken cancellationToken)
+
+        public override Task<Hover> Handle(HoverParams request, CancellationToken cancellationToken)
         {
             var hash = Hash.StringHash(request.TextDocument.Uri.GetFileSystemPath());
             var ptr = TreeSitter.Hover(hash, request.Position.Line, request.Position.Character);
@@ -107,7 +104,9 @@ namespace jai_lsp
             return Task.FromResult(hover);
         }
 
-        public void SetCapability(HoverCapability capability)
+   
+
+        public override void SetCapability(HoverCapability capability)
         {
             
         }

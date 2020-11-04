@@ -44,15 +44,13 @@ namespace jai_lsp
               .CreateLogger();
 
 
-            //IObserver<WorkDoneProgressReport> workDone = null;
-
             var server = await LanguageServer.From(options =>
                 options
                     .WithInput(Console.OpenStandardInput())
                     .WithOutput(Console.OpenStandardOutput())
                     .ConfigureLogging(x => x
                         .AddSerilog()
-                        .AddLanguageServer()
+                        .AddLanguageProtocolLogging()
 #if DEBUG
                         .SetMinimumLevel(LogLevel.Debug))
 #else
@@ -66,7 +64,7 @@ namespace jai_lsp
                     .WithHandler<WorkspaceFolderChangeHandler>()
 
                     // handlers added after here dont work i think!
-                    .WithHandler<SemanticHighlight>()
+                    .WithHandler<SemanticTokensHandler>()
 
                     .WithServices(ConfigureServices)
                     .WithServices(x => x.AddLogging(b => b.SetMinimumLevel(LogLevel.Error)))
@@ -83,60 +81,15 @@ namespace jai_lsp
                         .AddSingleton<HashNamer>();
                         
                     })
-                    /*
-                    .OnInitialize(async (server, request, token) => {
-                        var manager = server.ProgressManager.WorkDone(request, new WorkDoneProgressBegin()
-                        {
-                            Title = "Server is starting...",
-                            Percentage = 10,
-                        });
-                        workDone = manager;
-
-                        await Task.Delay(2000);
-
-                        manager.OnNext(new WorkDoneProgressReport()
-                        {
-                            Percentage = 20,
-                            Message = "loading in progress"
-                        });
-                    })
-                    .OnInitialized(async (server, request, response, token) => {
-                        workDone.OnNext(new WorkDoneProgressReport()
-                        {
-                            Percentage = 40,
-                            Message = "loading almost done",
-                        });
-
-                        await Task.Delay(2000);
-
-                        workDone.OnNext(new WorkDoneProgressReport()
-                        {
-                            Message = "loading done",
-                            Percentage = 100,
-                        });
-                        workDone.OnCompleted();
-                    })
-                    */
                      
 
-                    .OnStarted(async (languageServer, result, token) => {
+                    .OnStarted(async (languageServer, token) => {
 
-                        /*
-                        using var manager = languageServer.ProgressManager.Create(new WorkDoneProgressBegin() { Title = "Doing some work..." });
+                        using var manager = await languageServer.WorkDoneManager.Create(new WorkDoneProgressBegin() { Title = "Parsing Modules", Percentage = 0, Cancellable = true });
 
-                        manager.OnNext(new WorkDoneProgressReport() { Message = "doing things..." });
-                        await Task.Delay(10000);
-                        manager.OnNext(new WorkDoneProgressReport() { Message = "doing things... 1234" });
-                        await Task.Delay(10000);
-                        manager.OnNext(new WorkDoneProgressReport() { Message = "doing things... 56789" });
-
-                        */
-
-                        using var manager = languageServer.ProgressManager.Create(new WorkDoneProgressBegin() { Title = "Parsing Modules", Percentage = 0, Cancellable = true });
                         var logger = languageServer.Services.GetService<ILogger<Logjam>>();
                         var namer = languageServer.Services.GetService<HashNamer>();
                         namer.server = languageServer;
-
                         WorkspaceFolderParams wsf = new WorkspaceFolderParams();
                         var wsfresults = await languageServer.Client.SendRequest(wsf, token);
             

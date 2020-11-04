@@ -1,27 +1,32 @@
 {
-    "name": "client",
-    "displayName": "Client",
-    "description": "jai lsp client",
-    "publisher": "pyromuffin",
+    "name": "language-client-example",
+    "description": "VSCode part of a language server",
+    "author": "Microsoft Corporation",
+    "license": "MIT",
     "version": "0.0.1",
-    "repository": "https://github.com/pyromuffin/jai-lsp",
+    "publisher": "vscode",
     "engines": {
         "vscode": "^1.8.0"
     },
     "categories": [
         "Other"
     ],
+    "activationEvents": [
+        "onLanguage:plaintext"
+    ],
+    "main": "./out/src/extension",
+    "enableProposedApi": true,
     "contributes": {
         "configuration": {
             "type": "object",
-            "title": "jai lsp configuration",
+            "title": "Example configuration",
             "properties": {
-                "jai_lsp.maxNumberOfProblems": {
+                "languageServerExample.maxNumberOfProblems": {
                     "type": "number",
                     "default": 100,
                     "description": "Controls the maximum number of problems produced by the server."
                 },
-                "jai_lsp.trace.server": {
+                "languageServerExample.trace.server": {
                     "type": "string",
                     "enum": [
                         "off",
@@ -32,21 +37,8 @@
                     "description": "Traces the communication between VSCode and the languageServerExample service."
                 }
             }
-        },
-        "languages": [
-            {
-                "id": "jai",
-                "extensions": [
-                    "jai"
-                ]
-            }
-        ]
+        }
     },
-    "activationEvents": [
-        "onLanguage:jai"
-    ],
-    "main": "./out/extension",
-    "enableProposedApi": true,
     "scripts": {
         "vscode:prepublish": "tsc -p ./",
         "compile": "tsc -p ./",

@@ -6,17 +6,20 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
+using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using OmniSharp.Extensions.LanguageServer.Protocol.Progress;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server.Capabilities;
-using OmniSharp.Extensions.LanguageServer.Server;
+using OmniSharp.Extensions.LanguageServer.Protocol.Server.WorkDone;
+using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;
 
 namespace jai_lsp
 {
     class HashNamer
     {
         public ConcurrentDictionary<ulong, string> hashToName = new ConcurrentDictionary<ulong, string>();
-        public OmniSharp.Extensions.LanguageServer.Server.ILanguageServer server;
+        public ILanguageServer server;
     }
 
 
