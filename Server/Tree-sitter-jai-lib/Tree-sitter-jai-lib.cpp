@@ -214,10 +214,6 @@ TokenType GetTokenTypeFromFlags(DeclarationFlags flags)
 
 
 
-
-
-
-
 static void HandleUnresolvedReferences(std::vector<int>& unresolvedTokenIndex, std::vector<TSNode>& unresolvedEntry, GapBuffer* buffer, FileScope* fileScope)
 {
 	for (int i = 0; i < unresolvedTokenIndex.size(); i++)

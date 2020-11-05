@@ -9,6 +9,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "tree-sitter-jai-wrapper", "
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ParserTester", "ParserTester\ParserTester.vcxproj", "{1239A450-6B4A-462A-BE12-BCF8D4FEB49D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jai-lsp-server-core", "jai-lsp-server-core\jai-lsp-server-core.csproj", "{B417E487-E6C3-4ACD-BFBC-D1B8730F82E2}"
+	ProjectSection(ProjectDependencies) = postProject
+		{29A326AD-5FDA-4DF1-BAEA-8E82135E95F2} = {29A326AD-5FDA-4DF1-BAEA-8E82135E95F2}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -52,6 +57,18 @@ Global
 		{1239A450-6B4A-462A-BE12-BCF8D4FEB49D}.Release|x64.Build.0 = Release|x64
 		{1239A450-6B4A-462A-BE12-BCF8D4FEB49D}.Release|x86.ActiveCfg = Release|Win32
 		{1239A450-6B4A-462A-BE12-BCF8D4FEB49D}.Release|x86.Build.0 = Release|Win32
+		{B417E487-E6C3-4ACD-BFBC-D1B8730F82E2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B417E487-E6C3-4ACD-BFBC-D1B8730F82E2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B417E487-E6C3-4ACD-BFBC-D1B8730F82E2}.Debug|x64.ActiveCfg = Debug|x64
+		{B417E487-E6C3-4ACD-BFBC-D1B8730F82E2}.Debug|x64.Build.0 = Debug|x64
+		{B417E487-E6C3-4ACD-BFBC-D1B8730F82E2}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{B417E487-E6C3-4ACD-BFBC-D1B8730F82E2}.Debug|x86.Build.0 = Debug|Any CPU
+		{B417E487-E6C3-4ACD-BFBC-D1B8730F82E2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B417E487-E6C3-4ACD-BFBC-D1B8730F82E2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B417E487-E6C3-4ACD-BFBC-D1B8730F82E2}.Release|x64.ActiveCfg = Release|Any CPU
+		{B417E487-E6C3-4ACD-BFBC-D1B8730F82E2}.Release|x64.Build.0 = Release|Any CPU
+		{B417E487-E6C3-4ACD-BFBC-D1B8730F82E2}.Release|x86.ActiveCfg = Release|Any CPU
+		{B417E487-E6C3-4ACD-BFBC-D1B8730F82E2}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

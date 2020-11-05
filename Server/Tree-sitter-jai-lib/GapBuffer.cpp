@@ -128,7 +128,7 @@ void GapBuffer::InsertAtCursor(const char* content, int length)
 
 GapBuffer::GapBuffer(const char* initialContent, int length)
 {
-    before.resize(length);
+    before.resize(std::max(length, 1));
     memcpy(&before[0], initialContent, length);
     
     // seek end:

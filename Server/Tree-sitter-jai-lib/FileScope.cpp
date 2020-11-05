@@ -109,6 +109,7 @@ void FileScope::HandleVariableReference(TSNode node, std::vector<Scope*>& scopeK
 	// if we get here then we've got an unresolved identifier, that we will check when we've parsed the entire document.
 	unresolvedEntry.push_back(node);
 	unresolvedTokenIndex.push_back(tokens.size());
+	token.type = (TokenType)-1;
 
 done:
 	tokens.push_back(token);
@@ -195,6 +196,15 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, Scope* currentScope, bool
 				king->name = GetIdentifierFromBufferCopy(identifiers[0], buffer); // this is probably not ideal.
 				king->members = &scopes[scopeNode.id];
 			}
+		}
+	}
+	else if (expressionType == g_constants.identifier) // i think this means that we have an identifier as the "type"
+	{
+		// evaluate the type of this node lmfao
+		auto exprType = EvaluateNodeExpressionType(cursor.Current(), buffer, currentScope, this);
+		if (exprType)
+		{
+			handle = exprType.value();
 		}
 	}
 
@@ -470,18 +480,19 @@ void FileScope::Build()
 }
 
 
-/*
-const std::optional<TypeHandle> EvaluateNodeExpressionType(TSNode node, GapBuffer* buffer, const std::vector<Scope*>& scopeKing, FileScope* fileScope)
+
+const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode node, const GapBuffer* buffer, Scope* current, FileScope* fileScope)
 {
 	auto symbol = ts_node_symbol(node);
 	auto hash = GetIdentifierHash(node, buffer);
 
 	if (symbol == g_constants.builtInType)
 	{
-		return s_builtInTypes[hash];
+		//return s_builtInTypes[hash];
 	}
 	else if (symbol == g_constants.identifier)
 	{
+		/*
 		// identifier of some kind. struct, union, or enum.
 		for (int sp = 0; sp < scopeKing.size(); sp++)
 		{
@@ -492,6 +503,12 @@ const std::optional<TypeHandle> EvaluateNodeExpressionType(TSNode node, GapBuffe
 				return &fileScope->types[decl.value().type.index];
 			}
 		}
+		*/
+		if (auto decl = current->TryGet(hash))
+		{
+			return decl.value().type;
+		}
+
 
 		if (auto decl = fileScope->SearchModules(hash))
 		{
@@ -501,7 +518,7 @@ const std::optional<TypeHandle> EvaluateNodeExpressionType(TSNode node, GapBuffe
 
 	// unresolved type or expression of some kind.
 
-	return nullptr;
+	return std::nullopt;
 }
 
-*/
+
