@@ -11,17 +11,22 @@
     "categories": [
         "Other"
     ],
+    "activationEvents": [
+        "onLanguage:jai"
+    ],
+    "main": "./out/src/extension",
+    "enableProposedApi": true,
     "contributes": {
         "configuration": {
             "type": "object",
-            "title": "jai lsp configuration",
+            "title": "jai lsp config",
             "properties": {
-                "jai_lsp.maxNumberOfProblems": {
+                "languageServerExample.maxNumberOfProblems": {
                     "type": "number",
                     "default": 100,
                     "description": "Controls the maximum number of problems produced by the server."
                 },
-                "jai_lsp.trace.server": {
+                "languageServerExample.trace.server": {
                     "type": "string",
                     "enum": [
                         "off",
@@ -42,11 +47,6 @@
             }
         ]
     },
-    "activationEvents": [
-        "onLanguage:jai"
-    ],
-    "main": "./out/extension",
-    "enableProposedApi": true,
     "scripts": {
         "vscode:prepublish": "tsc -p ./",
         "compile": "tsc -p ./",
@@ -60,7 +60,7 @@
         "vscode": "^1.1.37"
     },
     "dependencies": {
-        "vscode-languageclient": "^7.0.0-next.8",
-        "vscode-languageserver-protocol": "^3.16.0-next.6"
+        "vscode-languageclient": "^7.0.0-next.12",
+        "vscode-languageserver-protocol": "^3.16.0-next.10"
     }
 }

@@ -8,7 +8,7 @@
     ".NETCoreApp,Version=v5.0": {
       "jai-lsp-server/1.0.0": {
         "dependencies": {
-          "OmniSharp.Extensions.LanguageServer": "0.18.2",
+          "OmniSharp.Extensions.LanguageServer": "1.0.0",
           "Serilog.Extensions.Logging": "3.0.2-dev-10281",
           "Serilog.Sinks.File": "5.0.0-dev-00887",
           "System.Reactive.Reference": "4.4.0.0"
@@ -263,7 +263,7 @@
           }
         }
       },
-      "OmniSharp.Extensions.JsonRpc/0.18.2": {
+      "OmniSharp.Extensions.JsonRpc/1.0.0": {
         "dependencies": {
           "MediatR": "8.1.0",
           "Microsoft.Extensions.DependencyInjection": "2.0.0",
@@ -276,45 +276,45 @@
         },
         "runtime": {
           "lib/netstandard2.1/OmniSharp.Extensions.JsonRpc.dll": {
-            "assemblyVersion": "0.18.0.0",
-            "fileVersion": "0.18.2.0"
+            "assemblyVersion": "0.0.9.9",
+            "fileVersion": "0.0.9.9"
           }
         }
       },
-      "OmniSharp.Extensions.LanguageProtocol/0.18.2": {
+      "OmniSharp.Extensions.LanguageProtocol/1.0.0": {
         "dependencies": {
           "Microsoft.Extensions.Configuration": "2.0.0",
-          "OmniSharp.Extensions.JsonRpc": "0.18.2"
+          "OmniSharp.Extensions.JsonRpc": "1.0.0"
         },
         "runtime": {
           "lib/netstandard2.1/OmniSharp.Extensions.LanguageProtocol.dll": {
-            "assemblyVersion": "0.18.0.0",
-            "fileVersion": "0.18.2.0"
+            "assemblyVersion": "0.0.9.9",
+            "fileVersion": "0.0.9.9"
           }
         }
       },
-      "OmniSharp.Extensions.LanguageServer/0.18.2": {
+      "OmniSharp.Extensions.LanguageServer/1.0.0": {
         "dependencies": {
           "Microsoft.Extensions.Configuration": "2.0.0",
-          "OmniSharp.Extensions.JsonRpc": "0.18.2",
-          "OmniSharp.Extensions.LanguageProtocol": "0.18.2",
-          "OmniSharp.Extensions.LanguageServer.Shared": "0.18.2"
+          "OmniSharp.Extensions.JsonRpc": "1.0.0",
+          "OmniSharp.Extensions.LanguageProtocol": "1.0.0",
+          "OmniSharp.Extensions.LanguageServer.Shared": "1.0.0"
         },
         "runtime": {
           "lib/netstandard2.1/OmniSharp.Extensions.LanguageServer.dll": {
-            "assemblyVersion": "0.18.0.0",
-            "fileVersion": "0.18.2.0"
+            "assemblyVersion": "0.0.9.9",
+            "fileVersion": "0.0.9.9"
           }
         }
       },
-      "OmniSharp.Extensions.LanguageServer.Shared/0.18.2": {
+      "OmniSharp.Extensions.LanguageServer.Shared/1.0.0": {
         "dependencies": {
-          "OmniSharp.Extensions.LanguageProtocol": "0.18.2"
+          "OmniSharp.Extensions.LanguageProtocol": "1.0.0"
         },
         "runtime": {
           "lib/netstandard2.1/OmniSharp.Extensions.LanguageServer.Shared.dll": {
-            "assemblyVersion": "0.18.0.0",
-            "fileVersion": "0.18.2.0"
+            "assemblyVersion": "0.0.9.9",
+            "fileVersion": "0.0.9.9"
           }
         }
       },
@@ -586,33 +586,33 @@
       "path": "newtonsoft.json/11.0.2",
       "hashPath": "newtonsoft.json.11.0.2.nupkg.sha512"
     },
-    "OmniSharp.Extensions.JsonRpc/0.18.2": {
+    "OmniSharp.Extensions.JsonRpc/1.0.0": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-vOvhZc4PWWNzSZCYlMAjPRdmcJuXzI+hQVYxdw7FWLJqMDqd7bJfFjH9QOdc7ZDWNV0F0qEp+LxN/jjqixhkGw==",
-      "path": "omnisharp.extensions.jsonrpc/0.18.2",
-      "hashPath": "omnisharp.extensions.jsonrpc.0.18.2.nupkg.sha512"
+      "sha512": "sha512-p57hFdg34kK9ogOOxVSaVhlVQMuauD4MYwyj0JrHmCoQChLYGY/b9YfZONG/o3wqYJtxrrjzWqntp4xeZHx7cg==",
+      "path": "omnisharp.extensions.jsonrpc/1.0.0",
+      "hashPath": "omnisharp.extensions.jsonrpc.1.0.0.nupkg.sha512"
     },
-    "OmniSharp.Extensions.LanguageProtocol/0.18.2": {
+    "OmniSharp.Extensions.LanguageProtocol/1.0.0": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-8clNX2cVS3Ne3H+uSRYqj7vpdO4Fz0poMQ4lxwylY+sJjXPwCK4QtatjSENjABYrobu0dcOOwj2nrTb1pRNVig==",
-      "path": "omnisharp.extensions.languageprotocol/0.18.2",
-      "hashPath": "omnisharp.extensions.languageprotocol.0.18.2.nupkg.sha512"
+      "sha512": "sha512-foNVYwPbZJVDEuOfmuS8920rtbwj8LZWW5Ut/suNwQYhrVQkONtz3N/w41Zf29BbF587sg7NrAdbSyTyVoSPLA==",
+      "path": "omnisharp.extensions.languageprotocol/1.0.0",
+      "hashPath": "omnisharp.extensions.languageprotocol.1.0.0.nupkg.sha512"
     },
-    "OmniSharp.Extensions.LanguageServer/0.18.2": {
+    "OmniSharp.Extensions.LanguageServer/1.0.0": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-8AhS6i6sZscWsablUI6L8OgBPxBKS2DFSQOPbnmGQMs0+4A0F4jsm3HC82YwblN66PveL8mrJhCvIcImFxxHHA==",
-      "path": "omnisharp.extensions.languageserver/0.18.2",
-      "hashPath": "omnisharp.extensions.languageserver.0.18.2.nupkg.sha512"
+      "sha512": "sha512-YtH6Ohc8qL9PbcuT4yKf5wUShLJ/QbqttiRll2FiegbLmcsK6mu5kN12X27zfcV4PL9RoZMqU9NzSfsWlKNebA==",
+      "path": "omnisharp.extensions.languageserver/1.0.0",
+      "hashPath": "omnisharp.extensions.languageserver.1.0.0.nupkg.sha512"
     },
-    "OmniSharp.Extensions.LanguageServer.Shared/0.18.2": {
+    "OmniSharp.Extensions.LanguageServer.Shared/1.0.0": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-dhGlxGmW7ujGmbDqTXE8IG0LkGmWXq3YS1xeutiRkC3qOnZFguPnH6rG580CnVgN3u0rTXslsH8RE2nWwau9Xg==",
-      "path": "omnisharp.extensions.languageserver.shared/0.18.2",
-      "hashPath": "omnisharp.extensions.languageserver.shared.0.18.2.nupkg.sha512"
+      "sha512": "sha512-PFosDm6I6BtLI4jvluQP3fX2GEQstZE5s95pmYYWK14EhHLz8B/Je0iaZ6MqeV6hR2EtItS4nghqnBZR6yFKqw==",
+      "path": "omnisharp.extensions.languageserver.shared/1.0.0",
+      "hashPath": "omnisharp.extensions.languageserver.shared.1.0.0.nupkg.sha512"
     },
     "Serilog/2.9.0": {
       "type": "package",
