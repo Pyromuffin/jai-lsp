@@ -74,7 +74,7 @@ namespace jai_lsp
     }
 
 
-    class Hoverer : HoverHandler
+    class Hoverer : IHoverHandler
     {
 
         private readonly DocumentSelector _documentSelector = new DocumentSelector(
@@ -84,14 +84,16 @@ namespace jai_lsp
             }
         );
 
-        public Hoverer(HoverRegistrationOptions options) : base(options)
+        public HoverRegistrationOptions GetRegistrationOptions()
         {
+            var options = new HoverRegistrationOptions();
             options.DocumentSelector = _documentSelector;
             options.WorkDoneProgress = false;
+
+            return options;
         }
 
-
-        public override Task<Hover> Handle(HoverParams request, CancellationToken cancellationToken)
+        public Task<Hover> Handle(HoverParams request, CancellationToken cancellationToken)
         {
             var hash = Hash.StringHash(request.TextDocument.Uri.GetFileSystemPath());
             var ptr = TreeSitter.Hover(hash, request.Position.Line, request.Position.Character);
@@ -106,9 +108,9 @@ namespace jai_lsp
 
    
 
-        public override void SetCapability(HoverCapability capability)
+        public void SetCapability(HoverCapability capability)
         {
-            
+
         }
     }
 

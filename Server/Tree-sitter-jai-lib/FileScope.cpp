@@ -115,6 +115,7 @@ done:
 	tokens.push_back(token);
 }
 
+
 static ScopeDeclaration AddEntryToScope(TSNode node, const GapBuffer* buffer, Scope* scope, TypeHandle type, DeclarationFlags flags)
 {
 	ScopeDeclaration entry;
@@ -130,7 +131,7 @@ static ScopeDeclaration AddEntryToScope(TSNode node, const GapBuffer* buffer, Sc
 	return entry;
 }
 
-void FileScope::HandleNamedDecl(const TSNode nameNode, Scope* currentScope, bool exporting)
+void FileScope::HandleNamedDecl(const TSNode nameNode, Scope* currentScope, std::vector<std::tuple<Hash, TSNode>>& unresolvedTypes,  bool exporting)
 {
 	static auto cursor = Cursor();
 	static std::vector<TSNode> identifiers;
@@ -154,6 +155,12 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, Scope* currentScope, bool
 
 	} while (cursor.Sibling());
 
+	if (identifiers.empty())
+	{
+		// likely some kind of error, or more complicated expression in the "names" node.
+		return;
+	}
+
 	cursor.Parent(); // back to names node
 	cursor.Sibling(); // always a ":"
 	cursor.Sibling(); // this is the hard part lol
@@ -166,7 +173,7 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, Scope* currentScope, bool
 		node = cursor.Current();
 	}
 
-	auto expressionType = ts_node_symbol(cursor.Current());
+	auto expressionType = ts_node_symbol(node);
 	// make these symbols constant somehow to use a switch statement
 	DeclarationFlags flags = (DeclarationFlags)0;
 	TypeHandle handle = TypeHandle::Null();
@@ -175,7 +182,29 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, Scope* currentScope, bool
 		flags = flags | DeclarationFlags::Exported;
 
 	if (expressionType == g_constants.constDecl)
+	{
 		flags = flags | DeclarationFlags::Constant;
+		auto hash = GetIdentifierHash(identifiers[0], buffer);
+
+		// descend into initializer
+		// from the grammar:
+		/*
+		const_initializer: $ => seq(
+			optional($._expression), 
+			seq(
+			":", 
+			CommaSep1($._expression)),
+		),
+		*/
+		cursor.Child(); // first expr, or ":"
+		if (!ts_node_is_named(cursor.Current()))
+		{
+			// if we get here then we hit ":", so it's an implicit initializer
+			cursor.Sibling();
+		}
+
+		unresolvedTypes.push_back(std::make_tuple(hash, cursor.Current()));
+	}
 	else if (expressionType == g_constants.funcDecl)
 		flags = flags | DeclarationFlags::Function;
 	else if (expressionType == g_constants.structDecl)
@@ -198,15 +227,13 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, Scope* currentScope, bool
 			}
 		}
 	}
-	else if (expressionType == g_constants.identifier) // i think this means that we have an identifier as the "type"
+	else
 	{
-		// evaluate the type of this node lmfao
-		auto exprType = EvaluateNodeExpressionType(cursor.Current(), buffer, currentScope, this);
-		if (exprType)
-		{
-			handle = exprType.value();
-		}
+		// unresolved type?
+		auto hash = GetIdentifierHash(identifiers[0], buffer);
+		unresolvedTypes.push_back( std::make_tuple(hash, node));
 	}
+
 
 	for (auto identifier : identifiers)
 	{
@@ -217,8 +244,11 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, Scope* currentScope, bool
 }
 
 
-void FileScope::FindDeclarations(TSNode scopeNode, Scope* scope, bool& exporting)
+void FileScope::FindDeclarations(TSNode scopeNode, Scope* scope, std::vector<Scope*>& scopeKing, bool& exporting)
 {
+	static thread_local std::vector<std::tuple<Hash, TSNode>> unresolvedNodes;
+	unresolvedNodes.clear();
+
 	static auto cursor = Cursor();
 	cursor.Reset(scopeNode);
 	cursor.Child(); // inside the scope
@@ -229,7 +259,7 @@ void FileScope::FindDeclarations(TSNode scopeNode, Scope* scope, bool& exporting
 		auto type = ts_node_symbol(node);
 		if (type == g_constants.namedDecl)
 		{
-			HandleNamedDecl(node, scope, exporting);
+			HandleNamedDecl(node, scope, unresolvedNodes, exporting);
 		}
 
 		else if (type == g_constants.scopeExport)
@@ -240,7 +270,38 @@ void FileScope::FindDeclarations(TSNode scopeNode, Scope* scope, bool& exporting
 
 	} while (cursor.Sibling());
 
+
+	bool resolvedAtLeastOne = false;
+
+	redo:
+	// resolve types now that all declarations have been added, we should be able to infer everything.
+	for (int i = 0; i < unresolvedNodes.size(); i++)
+	{
+		auto& unresolved = unresolvedNodes[i];
+		auto exprType = EvaluateNodeExpressionType(std::get<1>(unresolved), buffer, scope, scopeKing, this);
+		if (exprType && exprType.value().fileIndex != UINT16_MAX)
+		{
+			auto handle = exprType.value();
+			scope->UpdateType(std::get<0>(unresolved), handle);
+
+			// erase swap back.
+			unresolved = unresolvedNodes.back();
+			unresolvedNodes.pop_back();
+			i--;
+
+			resolvedAtLeastOne = true;
+		}
+	}
+
+	if (resolvedAtLeastOne && !unresolvedNodes.empty())
+	{
+		resolvedAtLeastOne = false;
+		goto redo;
+	}
+
+
 }
+
 
 
 void FileScope::CreateScope(TSNode& node,  std::unordered_map<Hash, TSNode>& parameters, std::vector<Scope*>& scopeKing, bool imperative, bool& exporting)
@@ -257,7 +318,7 @@ void FileScope::CreateScope(TSNode& node,  std::unordered_map<Hash, TSNode>& par
 	}
 	parameters.clear();
 
-	FindDeclarations(node, localScope, exporting);
+	FindDeclarations(node, localScope, scopeKing, exporting);
 
 	scopeKing.push_back(localScope);
 }
@@ -315,7 +376,7 @@ void FileScope::CreateTopLevelScope(TSNode node, std::vector<Scope*>& scopeKing,
 		} while (ts_tree_cursor_goto_next_sibling(&cursor));
 	}
 
-	FindDeclarations(node, bigScope, exporting);
+	FindDeclarations(node, bigScope, scopeKing, exporting);
 
 	ts_tree_cursor_delete(&cursor);
 	scopeKing.push_back(bigScope);
@@ -481,36 +542,38 @@ void FileScope::Build()
 
 
 
-const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode node, const GapBuffer* buffer, Scope* current, FileScope* fileScope)
+const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode node, const GapBuffer* buffer, Scope* current, std::vector<Scope*>& scopeKing, FileScope* fileScope)
 {
 	auto symbol = ts_node_symbol(node);
 	auto hash = GetIdentifierHash(node, buffer);
 
 	if (symbol == g_constants.builtInType)
 	{
-		//return s_builtInTypes[hash];
+		// built in types need to get addded to the global type king holder.
+		//return g_constants.builtInTypes[hash];
 	}
 	else if (symbol == g_constants.identifier)
 	{
-		/*
 		// identifier of some kind. struct, union, or enum.
+
+
+		if (auto decl = current->TryGet(hash))
+		{
+			return decl.value().type;
+		}
+
 		for (int sp = 0; sp < scopeKing.size(); sp++)
 		{
 			int index = scopeKing.size() - sp - 1;
 			auto frame = scopeKing[index];
 			if (auto decl = frame->TryGet(hash))
 			{
-				return &fileScope->types[decl.value().type.index];
+				return decl.value().type;
 			}
 		}
-		*/
-		if (auto decl = current->TryGet(hash))
-		{
-			return decl.value().type;
-		}
+		
 
-
-		if (auto decl = fileScope->SearchModules(hash))
+		if (auto decl = fileScope->Search(hash))
 		{
 			return decl.value().type;
 		}

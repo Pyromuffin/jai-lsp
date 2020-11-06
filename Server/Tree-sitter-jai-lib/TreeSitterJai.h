@@ -10,24 +10,7 @@ extern "C" TSLanguage * tree_sitter_jai();
 extern TSLanguage* g_jaiLang;
 
 
-struct Constants
-{
-	 TSSymbol constDecl;
-	 TSSymbol import;
-	 TSSymbol varDecl;
-	 TSSymbol funcDecl;
-	 TSSymbol structDecl;
-	 TSSymbol memberAccess;
-	 TSSymbol load;
-	 TSSymbol builtInType;
-	 TSSymbol identifier;
-	 TSSymbol namedDecl;
-	 TSSymbol scopeFile;
-	 TSSymbol scopeExport;
-	 TSSymbol dataScope;
-};
 
-extern Constants g_constants;
 
 enum class TokenType : uint8_t
 {
@@ -266,6 +249,25 @@ public:
 		}
 	}
 
+
+	void UpdateType(const Hash hash, const TypeHandle type)
+	{
+#if SMALL
+		if (size < small_size)
+		{
+			for (int i = 0; i < size; i++)
+			{
+				if (small_hashes[i] == hash)
+				{
+					small_declarations[i].type = type;
+					return;
+				}
+			}
+		}
+#endif
+
+		declarations[hash].type = type;
+	}
 };
 
 
@@ -362,8 +364,27 @@ struct Cursor
 };
 
 
+struct Constants
+{
+	TSSymbol constDecl;
+	TSSymbol import;
+	TSSymbol varDecl;
+	TSSymbol funcDecl;
+	TSSymbol structDecl;
+	TSSymbol memberAccess;
+	TSSymbol memberAccessNothing;
+	TSSymbol load;
+	TSSymbol builtInType;
+	TSSymbol identifier;
+	TSSymbol namedDecl;
+	TSSymbol scopeFile;
+	TSSymbol scopeExport;
+	TSSymbol dataScope;
 
+	std::unordered_map<Hash, TypeKing*> builtInTypes;
+};
 
+extern Constants g_constants;
 extern ConcurrentDictionary<TSTree*> g_trees;
 extern ConcurrentDictionary<GapBuffer*> g_buffers;
 extern ConcurrentDictionary<std::string> g_filePaths;

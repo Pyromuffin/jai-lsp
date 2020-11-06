@@ -44,13 +44,14 @@ struct FileScope
 		return &types[handle.index];
 	}
 
-	const std::optional<TypeHandle> EvaluateNodeExpressionType(TSNode node, const GapBuffer* buffer, Scope* current, FileScope* fileScope);
 	void HandleVariableReference(TSNode node, std::vector<Scope*>& scopeKing, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex, std::unordered_map<Hash, TSNode>& parameters);
-	void HandleNamedDecl(const TSNode nameNode, Scope* currentScope, bool exporting);
-	void FindDeclarations(TSNode scopeNode, Scope* scope, bool& exporting);
+	void HandleNamedDecl(const TSNode nameNode, Scope* currentScope, std::vector<std::tuple<Hash, TSNode>>& unresolvedTypes, bool exporting);
+	void FindDeclarations(TSNode scopeNode, Scope* scope, std::vector<Scope*>& scopeKing, bool& exporting);
 	void CreateScope(TSNode& node, std::unordered_map<Hash, TSNode>& parameters, std::vector<Scope*>& scopeKing, bool imperative, bool& exporting);
 	void CreateTopLevelScope(TSNode node, std::vector<Scope*>& scopeKing, bool& exporting);
 	void Build();
+
+	const std::optional<TypeHandle> EvaluateNodeExpressionType(TSNode node, const GapBuffer* buffer, Scope* current, std::vector<Scope*>& scopeKing, FileScope* fileScope);
 
 
 };

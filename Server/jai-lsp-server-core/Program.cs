@@ -51,7 +51,7 @@ namespace jai_lsp
 #endif
                     .WithHandler<SignatureHelper>()
                     //.WithHandler<Definer>()
-                    //.WithHandler<Hoverer>()
+                    .WithHandler<Hoverer>()
                     .WithHandler<TextDocumentHandler>()
                     .WithHandler<CompletionHandler>()
                   //  .WithHandler<WorkspaceFolderChangeHandler>()

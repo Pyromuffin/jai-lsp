@@ -27,26 +27,25 @@ Constants g_constants;
 static char names[1000];
 export long long UpdateTree(Hash documentHash);
 
-static std::unordered_map<Hash, TypeKing*> s_builtInTypes;
 
 static void SetupBuiltInTypes()
 {
-	s_builtInTypes[StringHash("bool")] =    new TypeKing{ .name = "bool" };
-	s_builtInTypes[StringHash("float32")] = new TypeKing{ .name = "float32" };
-	s_builtInTypes[StringHash("float")] = s_builtInTypes[StringHash("float32")];
-	s_builtInTypes[StringHash("float64")] = new TypeKing{ .name = "float64" };
-	s_builtInTypes[StringHash("char")] =    new TypeKing{ .name = "char" };
-	s_builtInTypes[StringHash("string")] =  new TypeKing{ .name = "string" }; // string has some members like data and length.
-	s_builtInTypes[StringHash("s8")] =      new TypeKing{ .name = "s8" };
-	s_builtInTypes[StringHash("s16")] =     new TypeKing{ .name = "s16" };
-	s_builtInTypes[StringHash("s32")] =     new TypeKing{ .name = "s32" };
-	s_builtInTypes[StringHash("s64")] =     new TypeKing{ .name = "s64" };
-	s_builtInTypes[StringHash("int")] = s_builtInTypes[StringHash("s64")]; // s64?
-	s_builtInTypes[StringHash("u8")] =      new TypeKing{ .name = "u8" };
-	s_builtInTypes[StringHash("u16")] =     new TypeKing{ .name = "u16" };
-	s_builtInTypes[StringHash("u32")] =     new TypeKing{ .name = "u32" };
-	s_builtInTypes[StringHash("u64")] =     new TypeKing{ .name = "u64" };
-	s_builtInTypes[StringHash("void")] =    new TypeKing{ .name = "void" };
+	g_constants.builtInTypes[StringHash("bool")] =    new TypeKing{ .name = "bool" };
+	g_constants.builtInTypes[StringHash("float32")] = new TypeKing{ .name = "float32" };
+	g_constants.builtInTypes[StringHash("float")] = g_constants.builtInTypes[StringHash("float32")];
+	g_constants.builtInTypes[StringHash("float64")] = new TypeKing{ .name = "float64" };
+	g_constants.builtInTypes[StringHash("char")] =    new TypeKing{ .name = "char" };
+	g_constants.builtInTypes[StringHash("string")] =  new TypeKing{ .name = "string" }; // string has some members like data and length.
+	g_constants.builtInTypes[StringHash("s8")] =      new TypeKing{ .name = "s8" };
+	g_constants.builtInTypes[StringHash("s16")] =     new TypeKing{ .name = "s16" };
+	g_constants.builtInTypes[StringHash("s32")] =     new TypeKing{ .name = "s32" };
+	g_constants.builtInTypes[StringHash("s64")] =     new TypeKing{ .name = "s64" };
+	g_constants.builtInTypes[StringHash("int")] = g_constants.builtInTypes[StringHash("s64")]; // s64?
+	g_constants.builtInTypes[StringHash("u8")] =      new TypeKing{ .name = "u8" };
+	g_constants.builtInTypes[StringHash("u16")] =     new TypeKing{ .name = "u16" };
+	g_constants.builtInTypes[StringHash("u32")] =     new TypeKing{ .name = "u32" };
+	g_constants.builtInTypes[StringHash("u64")] =     new TypeKing{ .name = "u64" };
+	g_constants.builtInTypes[StringHash("void")] =    new TypeKing{ .name = "void" };
 
 }
 
@@ -60,6 +59,7 @@ export int Init()
 	g_constants.funcDecl = ts_language_symbol_for_name(g_jaiLang, "function_definition", strlen("function_definition"), true);
 	g_constants.structDecl = ts_language_symbol_for_name(g_jaiLang, "struct_definition", strlen("struct_definition"), true);
 	g_constants.memberAccess = ts_language_symbol_for_name(g_jaiLang, "member_access", strlen("member_access"), true);
+	g_constants.memberAccessNothing = ts_language_symbol_for_name(g_jaiLang, "member_access_nothing", strlen("member_access_nothing"), true);
 	g_constants.load = ts_language_symbol_for_name(g_jaiLang, "load_statement", strlen("load_statement"), true);
 	g_constants.builtInType = ts_language_symbol_for_name(g_jaiLang, "built_in_type", strlen("built_in_type"), true);
 	g_constants.identifier = ts_language_symbol_for_name(g_jaiLang, "identifier", strlen("identifier"), true);

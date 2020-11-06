@@ -1,6 +1,12 @@
 #include "TreeSitterJai.h"
 #include "FileScope.h"
 
+static bool IsMemberAccess(TSSymbol symbol)
+{
+	return symbol == g_constants.memberAccess || symbol == g_constants.memberAccessNothing;
+
+}
+
 
 const TypeKing* GetType(TypeHandle handle)
 {
@@ -51,6 +57,7 @@ std::optional<ScopeDeclaration> GetDeclarationForTopLevelNode(TSNode node, FileS
 }
 
 
+
 std::optional<ScopeDeclaration> EvaluateMemberAccess(TSNode node, FileScope* fileScope, GapBuffer* buffer)
 {
 	// rhs should always be an identifier ?
@@ -59,7 +66,7 @@ std::optional<ScopeDeclaration> EvaluateMemberAccess(TSNode node, FileScope* fil
 	auto lhsSymbol = ts_node_symbol(lhs);
 	std::optional<ScopeDeclaration> lhsType = std::nullopt;
 
-	if (lhsSymbol == g_constants.memberAccess)
+	if (IsMemberAccess(lhsSymbol))
 	{
 		lhsType = EvaluateMemberAccess(lhs, fileScope, buffer);
 	}
@@ -74,6 +81,9 @@ std::optional<ScopeDeclaration> EvaluateMemberAccess(TSNode node, FileScope* fil
 
 	if (!lhsType)
 		return std::nullopt;
+
+	if (ts_node_symbol(node) == g_constants.memberAccessNothing)
+		return lhsType;
 
 	auto rhs = ts_node_named_child(node, 1);
 	auto rhsHash = GetIdentifierHash(rhs, buffer);
@@ -108,7 +118,7 @@ std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fi
 	// if this is a member access, then get the type of the RHS, which will require getting the type of the LHS.
 
 	auto nodeSymbol = ts_node_symbol(node);
-	if (nodeSymbol == g_constants.memberAccess)
+	if (IsMemberAccess(nodeSymbol))
 	{
 		return EvaluateMemberAccess(node, fileScope, buffer);
 	}
@@ -130,7 +140,7 @@ std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fi
 		if (!terminalLHS)
 		{
 			auto parentSymbol = ts_node_symbol(parent);
-			if (parentSymbol == g_constants.memberAccess)
+			if (IsMemberAccess(parentSymbol))
 			{
 				auto lhs = ts_node_named_child(parent, 0);
 				if (lhs.id == node.id)
