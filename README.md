@@ -12,10 +12,10 @@ This is a language server for the jai language. The goal is to provide the follo
 3) diagnostics: squiggles for unknown identifiers.
 
 4) code completion
-  * top level definitions: mostly working
-  * member access:         mostly working
-  * using statement:       not started
-  * parameters:            not started
+     * top level definitions: mostly working
+     * member access:         mostly working
+     * using statement:       not started
+     * parameters:            not started
   
   
   build instructions forthcoming, because there are still some things that are fairly hardcoded to my environment.
