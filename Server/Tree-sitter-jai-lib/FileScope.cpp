@@ -65,6 +65,109 @@ std::optional<ScopeDeclaration> FileScope::Search(Hash identifierHash)
 	return SearchModules(identifierHash);
 }
 
+static const TypeKing* GetGlobalType(TypeHandle handle)
+{
+	return g_fileScopeByIndex[handle.fileIndex]->GetType(handle);
+}
+
+std::optional<ScopeDeclaration> FileScope::GetRightHandSideDecl(TSNode lhsDeclNode, Hash rhsHash, std::vector<Scope*>& scopeKing)
+{
+	auto lhsType = EvaluateNodeExpressionType(lhsDeclNode, buffer, scopeKing[scopeKing.size() - 1], scopeKing, this);
+	if (lhsType)
+	{
+		auto typeScope = g_fileScopeByIndex[lhsType->fileIndex];
+		auto typeKing = typeScope->GetType(*lhsType);
+		auto rhsDecl = typeKing->members->TryGet(rhsHash);
+		return rhsDecl;
+	}
+
+	return std::nullopt;
+}
+
+void FileScope::HandleMemberReference(TSNode lhsNode, TSNode rhsNode, std::vector<Scope*>& scopeKing, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex, std::unordered_map<Hash, TSNode>& parameters)
+{
+	auto lhsHash = GetIdentifierHash(lhsNode, buffer);
+	auto rhsHash = GetIdentifierHash(rhsNode, buffer);
+
+	auto start = ts_node_start_point(rhsNode);
+	auto end = ts_node_end_point(rhsNode);
+	SemanticToken token;
+	token.col = start.column;
+	token.line = start.row;
+	token.length = end.column - start.column;
+	token.modifier = (TokenModifier)0;
+
+	auto decl = GetDeclarationForNode(rhsNode, this, buffer);
+	if (decl)
+	{
+		token.type = GetTokenTypeFromFlags(decl->flags);
+		tokens.push_back(token);
+		return;
+	}
+
+	// if we get here then we've got an unresolved identifier, that we will check when we've parsed the entire document.
+	unresolvedEntry.push_back(rhsNode);
+	unresolvedTokenIndex.push_back(tokens.size());
+	token.type = (TokenType)-1;
+
+	tokens.push_back(token);
+	return;
+
+	/*
+	if (parameters.size() > 0)
+	{
+		auto it = parameters.find(lhsHash);
+
+		if (it != parameters.end())
+		{
+			auto rhsDecl = GetRightHandSideDecl(it->second, rhsHash, scopeKing);
+			if (rhsDecl)
+			{
+				token.type = GetTokenTypeFromFlags(rhsDecl->flags);
+				goto done;
+			}
+		}
+	}
+
+	for (int sp = 0; sp < scopeKing.size(); sp++)
+	{
+		int index = scopeKing.size() - sp - 1;
+		auto frame = scopeKing[index];
+		if (auto decl = frame->TryGet(lhsHash))
+		{
+			if (decl->type.fileIndex == UINT16_MAX)
+				goto bad;
+				
+			auto lhsType = GetGlobalType(decl->type);
+			auto rhsDecl = lhsType->members->TryGet(rhsHash);
+			if (rhsDecl)
+			{
+				token.type = GetTokenTypeFromFlags(rhsDecl->flags);
+				goto done;
+			}
+		}
+	}
+
+	// search modules
+	if (auto decl = SearchModules(lhsHash))
+	{
+		if (decl->type.fileIndex == UINT16_MAX)
+			goto bad;
+
+		auto lhsType = GetGlobalType(decl->type);
+		auto rhsDecl = lhsType->members->TryGet(rhsHash);
+		if (rhsDecl)
+		{
+			token.type = GetTokenTypeFromFlags(rhsDecl->flags);
+			goto done;
+		}
+	}
+	*/
+
+}
+
+
+
 void FileScope::HandleVariableReference(TSNode node, std::vector<Scope*>& scopeKing, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex, std::unordered_map<Hash, TSNode>& parameters)
 {
 	auto hash = GetIdentifierHash(node, buffer);
@@ -131,10 +234,10 @@ static ScopeDeclaration AddEntryToScope(TSNode node, const GapBuffer* buffer, Sc
 	return entry;
 }
 
-void FileScope::HandleNamedDecl(const TSNode nameNode, Scope* currentScope, std::vector<std::tuple<Hash, TSNode>>& unresolvedTypes,  bool exporting)
+void FileScope::HandleNamedDecl(const TSNode nameNode, Scope* currentScope, std::vector<std::tuple<Hash, TSNode>>& unresolvedTypes, std::vector<Scope*>& scopeKing,  std::vector<TSNode>& structs, bool exporting)
 {
-	static auto cursor = Cursor();
-	static std::vector<TSNode> identifiers;
+	auto cursor = Cursor();
+	std::vector<TSNode> identifiers;
 
 	identifiers.clear();
 	cursor.Reset(nameNode);
@@ -211,7 +314,7 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, Scope* currentScope, std:
 	{
 		// allocate a new typeking
 		handle = AllocateType();
-		auto king = GetType(handle);
+		auto king = &types[handle.index];
 
 		flags = flags | DeclarationFlags::Struct;
 		// descend into struct decl to find the scope.
@@ -222,8 +325,9 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, Scope* currentScope, std:
 			auto symbol = ts_node_symbol(scopeNode);
 			if (symbol == g_constants.dataScope)
 			{
-				king->name = GetIdentifierFromBufferCopy(identifiers[0], buffer); // this is probably not ideal.
+				king->name = GetIdentifierFromBufferCopy(identifiers[0], buffer); //@todo this is probably not ideal, allocating a string for every type name every time.
 				king->members = &scopes[scopeNode.id];
+				structs.push_back(scopeNode);
 			}
 		}
 	}
@@ -246,10 +350,36 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, Scope* currentScope, std:
 
 void FileScope::FindDeclarations(TSNode scopeNode, Scope* scope, std::vector<Scope*>& scopeKing, bool& exporting)
 {
-	static thread_local std::vector<std::tuple<Hash, TSNode>> unresolvedNodes;
+	// OK TO MAKE THIS WORK we need to handle the following two cases:
+	/*
+		
+		myThing : Thing1;
+		myThing.item1;     <--------------- Problem 1) myThing needs to know about the members on Thing1 before it gets to them.
+		
+		Thing1 :: struct
+		{
+		   item1 : Thing2; <--------------- Problem 2) Thing1 needs to know that Thing2 exists. If we create the scope of Thing1 when we encounter it, then we can't know about Thing2.
+		}
+	
+		Thing2 :: struct
+		{
+			name : string;
+		}
+	
+	
+
+	*/
+	// so we can do breadth first, finding declarations, then doing type-resovling-and-inference, this solves problem 2.
+	// we can try the following:
+	// do all the declarations in a scope, breadth first
+	// then do all the scopes in the scope, breadth first. this is annoying becuase now we have to iterate through the tree 3 times. Or we can keep track of the struct bodies that need scope-creating.
+	// then do the identifier reference colorings in order
+
+	std::vector<TSNode> structs;
+	std::vector<std::tuple<Hash, TSNode>> unresolvedNodes;
 	unresolvedNodes.clear();
 
-	static auto cursor = Cursor();
+	auto cursor = Cursor();
 	cursor.Reset(scopeNode);
 	cursor.Child(); // inside the scope
 
@@ -259,7 +389,7 @@ void FileScope::FindDeclarations(TSNode scopeNode, Scope* scope, std::vector<Sco
 		auto type = ts_node_symbol(node);
 		if (type == g_constants.namedDecl)
 		{
-			HandleNamedDecl(node, scope, unresolvedNodes, exporting);
+			HandleNamedDecl(node, scope, unresolvedNodes, scopeKing, structs, exporting);
 		}
 
 		else if (type == g_constants.scopeExport)
@@ -300,11 +430,18 @@ void FileScope::FindDeclarations(TSNode scopeNode, Scope* scope, std::vector<Sco
 	}
 
 
+	// after types have been inferred, we can go into the struct bodies and create their members
+	for (auto structScope : structs)
+	{
+		CreateScope(structScope, nullptr, scopeKing, false, exporting); //@TODO this doesn't handle structs with parameters.
+		scopeKing.pop_back();
+	}
+
 }
 
 
 
-void FileScope::CreateScope(TSNode& node,  std::unordered_map<Hash, TSNode>& parameters, std::vector<Scope*>& scopeKing, bool imperative, bool& exporting)
+void FileScope::CreateScope(TSNode& node,  std::unordered_map<Hash, TSNode>* parameters, std::vector<Scope*>& scopeKing, bool imperative, bool& exporting)
 {
 	auto localScope = &scopes[node.id];
 	localScope->imperative = imperative;
@@ -312,11 +449,16 @@ void FileScope::CreateScope(TSNode& node,  std::unordered_map<Hash, TSNode>& par
 	auto end = ts_node_end_byte(node);
 
 	// if we have any paremeters, inject them here.
-	for (auto& kvp : parameters)
+	if (parameters)
 	{
-		AddEntryToScope(kvp.second, buffer, localScope, TypeHandle::Null(), (DeclarationFlags)0);
+		for (auto& kvp : *parameters)
+		{
+			AddEntryToScope(kvp.second, buffer, localScope, TypeHandle::Null(), (DeclarationFlags)0); // @TODO parameters need types!
+		}
+
+		parameters->clear();
 	}
-	parameters.clear();
+
 
 	FindDeclarations(node, localScope, scopeKing, exporting);
 
@@ -396,6 +538,7 @@ void FileScope::Build()
 		"(data_scope) @data.scope"
 		"(imperative_scope) @imperative.scope"
 		"(parameter (identifier) @parameter_decl \":\")" // this kinda sucks
+		"(member_access . (_) @member_lhs (_) @member_rhs )"
 		"(identifier) @var_ref"
 		"(block_end) @block_end"
 		"(export_scope_directive) @export"
@@ -424,6 +567,8 @@ void FileScope::Build()
 		dataScope,
 		imperativeScope,
 		parmeter_decl,
+		member_lhs,
+		member_rhs,
 		var_ref,
 		block_end,
 		export_scope,
@@ -439,6 +584,9 @@ void FileScope::Build()
 
 	CreateTopLevelScope(root, scopeKing, exporting);
 
+	TSNode memberLHS;
+	int identifiersToSkip = 0;
+
 	while (ts_query_cursor_next_capture(queryCursor, &match, &index))
 	{
 		ScopeMarker captureType = (ScopeMarker)match.captures[index].index;
@@ -447,12 +595,12 @@ void FileScope::Build()
 		{
 		case ScopeMarker::dataScope:
 		{
-			CreateScope(node, parameters, scopeKing, false, exporting);
+			scopeKing.push_back(&scopes[node.id]);
 			break;
 		}
 		case ScopeMarker::imperativeScope:
 		{
-			CreateScope(node, parameters, scopeKing, true, exporting);
+			CreateScope(node, &parameters, scopeKing, true, exporting);
 			break;
 		}
 		/*
@@ -506,9 +654,25 @@ void FileScope::Build()
 			parameters[GetIdentifierHash(node, buffer)] = node;
 			break;
 		}
-
+		case ScopeMarker::member_lhs:
+		{
+			memberLHS = node;
+			break;
+		}
+		case ScopeMarker::member_rhs:
+		{
+			HandleMemberReference(memberLHS, node, scopeKing, unresolvedEntry, unresolvedTokenIndex, parameters);
+			identifiersToSkip++;
+			break;
+		}
 		case ScopeMarker::var_ref:
 		{
+			if (identifiersToSkip > 0)
+			{
+				identifiersToSkip--;
+				break;
+			}
+
 			HandleVariableReference(node, scopeKing, unresolvedEntry, unresolvedTokenIndex, parameters);
 			break;
 		}

@@ -200,8 +200,16 @@ int main()
 	*/
 	
 	Init();
+	auto code =
+		"zebra :: struct { legs : int; } \n"
+		"bob : zebra; \n"
+		"bob.legs = 5; \n"
+		;
 
-	ParseModules(30);
+
+		CreateTree("zebra", code, strlen(code));
+
+	//ParseModules(30);
 
 }
 

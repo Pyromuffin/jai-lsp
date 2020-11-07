@@ -18,7 +18,7 @@ const TypeKing* GetType(TypeHandle handle)
 	return &g_fileScopeByIndex[handle.fileIndex]->types[handle.index];
 }
 
-std::optional<ScopeDeclaration> GetDeclarationForNodeFromScope(TSNode node, FileScope* fileScope, GapBuffer* buffer, Scope* scope, TSNode parent)
+std::optional<ScopeDeclaration> GetDeclarationForNodeFromScope(TSNode node, FileScope* fileScope, const GapBuffer* buffer, Scope* scope, TSNode parent)
 {
 	// search scopes going up for entries, if they're data scopes. if they're imperative scopes then declarations have to be in order.
 	auto identifierHash = GetIdentifierHash(node, buffer);
@@ -49,7 +49,7 @@ std::optional<ScopeDeclaration> GetDeclarationForNodeFromScope(TSNode node, File
 }
 
 
-std::optional<ScopeDeclaration> GetDeclarationForTopLevelNode(TSNode node, FileScope* fileScope, GapBuffer* buffer)
+std::optional<ScopeDeclaration> GetDeclarationForTopLevelNode(TSNode node, FileScope* fileScope, const GapBuffer* buffer)
 {
 	TSNode parent;
 	auto scope = GetScopeAndParentForNode(node, fileScope, &parent);
@@ -58,7 +58,7 @@ std::optional<ScopeDeclaration> GetDeclarationForTopLevelNode(TSNode node, FileS
 
 
 
-std::optional<ScopeDeclaration> EvaluateMemberAccess(TSNode node, FileScope* fileScope, GapBuffer* buffer)
+std::optional<ScopeDeclaration> EvaluateMemberAccess(TSNode node, FileScope* fileScope, const GapBuffer* buffer)
 {
 	// rhs should always be an identifier ?
 	
@@ -101,7 +101,7 @@ std::optional<ScopeDeclaration> EvaluateMemberAccess(TSNode node, FileScope* fil
 }
 
 
-std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fileScope, GapBuffer* buffer)
+std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fileScope, const GapBuffer* buffer)
 {
 	/*
 				---------------

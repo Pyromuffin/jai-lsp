@@ -337,6 +337,11 @@ struct Cursor
 		cursor = ts_tree_cursor_new(TSNode());
 	}
 
+	~Cursor()
+	{
+		ts_tree_cursor_delete(&cursor);
+	}
+
 	void Reset(TSNode node)
 	{
 		ts_tree_cursor_reset(&cursor, node);
@@ -396,7 +401,7 @@ Hash GetIdentifierHash(const TSNode& node, std::string_view code);
 Hash GetIdentifierHash(const TSNode& node, const GapBuffer* buffer);
 Scope* GetScopeForNode(const TSNode& node, FileScope* scope);
 Scope* GetScopeAndParentForNode(const TSNode& node, FileScope* scope, TSNode* outParentNode);
-std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fileScope, GapBuffer* buffer);
+std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fileScope, const GapBuffer* buffer);
 const TypeKing* GetTypeForNode(TSNode node, FileScope* fileScope, GapBuffer* buffer);
 const TypeKing* GetType(TypeHandle handle);
 TokenType GetTokenTypeFromFlags(DeclarationFlags flags);

@@ -33,21 +33,27 @@ struct FileScope
 	std::optional<ScopeDeclaration> SearchModules(Hash identifierHash);
 	std::optional<ScopeDeclaration> Search(Hash identifierHash);
 
+	std::optional<ScopeDeclaration> GetRightHandSideDecl(TSNode lhsDeclNode, Hash rhsHash, std::vector<Scope*>& scopeKing);
+
+
+
 	TypeHandle AllocateType()
 	{
 		types.push_back(TypeKing());
 		return TypeHandle{ .fileIndex = fileIndex, .index = static_cast<uint16_t>(types.size() - 1) };
 	}
 
-	TypeKing* GetType(TypeHandle handle)
+	const TypeKing* GetType(TypeHandle handle) const
 	{
 		return &types[handle.index];
 	}
 
+
+	void HandleMemberReference(TSNode lhsNode, TSNode rhsNode, std::vector<Scope*>& scopeKing, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex, std::unordered_map<Hash, TSNode>& parameters);
 	void HandleVariableReference(TSNode node, std::vector<Scope*>& scopeKing, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex, std::unordered_map<Hash, TSNode>& parameters);
-	void HandleNamedDecl(const TSNode nameNode, Scope* currentScope, std::vector<std::tuple<Hash, TSNode>>& unresolvedTypes, bool exporting);
+	void HandleNamedDecl(const TSNode nameNode, Scope* currentScope, std::vector<std::tuple<Hash, TSNode>>& unresolvedTypes, std::vector<Scope*>& scopeKing, std::vector<TSNode>& structs, bool exporting);
 	void FindDeclarations(TSNode scopeNode, Scope* scope, std::vector<Scope*>& scopeKing, bool& exporting);
-	void CreateScope(TSNode& node, std::unordered_map<Hash, TSNode>& parameters, std::vector<Scope*>& scopeKing, bool imperative, bool& exporting);
+	void CreateScope(TSNode& node, std::unordered_map<Hash, TSNode>* parameters, std::vector<Scope*>& scopeKing, bool imperative, bool& exporting);
 	void CreateTopLevelScope(TSNode node, std::vector<Scope*>& scopeKing, bool& exporting);
 	void Build();
 

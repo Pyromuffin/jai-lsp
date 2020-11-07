@@ -45,7 +45,7 @@ namespace jai_lsp
                         .AddSerilog()
                         .AddLanguageProtocolLogging()
 #if DEBUG
-                        .SetMinimumLevel(LogLevel.Debug))
+                        .SetMinimumLevel(LogLevel.Error))
 #else
                         .SetMinimumLevel(LogLevel.Error))
 #endif
@@ -114,15 +114,15 @@ namespace jai_lsp
                                 if(exists)
                                 {
                                     manager.OnNext(new WorkDoneProgressReport() { Message = moduleFilePath, Percentage = (double)current / count });
-                                    //var task = Task.Run(() => TreeSitter.CreateTreeFromPath(moduleFilePath, moduleName));
-                                    //tasks.Add(task);
-                                    totalTime += TreeSitter.CreateTreeFromPath(moduleFilePath, moduleName);
-                                    current++;
+                                    var task = Task.Run(() => TreeSitter.CreateTreeFromPath(moduleFilePath, moduleName));
+                                    tasks.Add(task);
+                                    //totalTime += TreeSitter.CreateTreeFromPath(moduleFilePath, moduleName);
+                                    //current++;
                                 }
 
                             }
 
-                            //await Task.WhenAll(tasks);
+                            await Task.WhenAll(tasks);
                             logger.LogInformation("Total time for serial module parsing: " + totalTime + " micros");
 
                         }

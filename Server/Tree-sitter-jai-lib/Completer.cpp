@@ -104,6 +104,7 @@ export const char* GetCompletionItems(Hash documentHash, int row, int col, Invoc
 			return str.c_str();
 		}
 
+		return nullptr;
 	}
 	else
 	{
