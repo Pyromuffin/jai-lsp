@@ -8,11 +8,16 @@ static bool IsMemberAccess(TSSymbol symbol)
 }
 
 
+
 const TypeKing* GetType(TypeHandle handle)
 {
-	if (handle.fileIndex == UINT16_MAX)
-	{
+	if (handle == TypeHandle::Null())
 		return nullptr;
+
+	if (handle.fileIndex == UINT16_MAX && handle.index != UINT16_MAX)
+	{
+		// built in type.
+		return &g_constants.builtInTypesByIndex[handle.index];
 	}
 
 	return &g_fileScopeByIndex[handle.fileIndex]->types[handle.index];
@@ -186,8 +191,10 @@ const TypeKing* GetTypeForNode(TSNode node, FileScope* fileScope, GapBuffer* buf
 }
 
 
-export const char* Hover(Hash documentName, int row, int col)
+export const char* Hover(uint64_t hashValue, int row, int col)
 {
+	auto documentName = Hash{ .value = hashValue };
+
 	auto tree = ts_tree_copy(g_trees.Read(documentName).value());
 	auto root = ts_tree_root_node(tree);
 	auto buffer = g_buffers.Read(documentName).value();

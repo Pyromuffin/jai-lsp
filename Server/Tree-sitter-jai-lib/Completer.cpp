@@ -9,8 +9,10 @@ enum InvocationType
 };
 
 
-export const char* GetCompletionItems(Hash documentHash, int row, int col, InvocationType invocation)
+export const char* GetCompletionItems(uint64_t hashValue, int row, int col, InvocationType invocation)
 {
+	auto documentHash = Hash{ .value = hashValue };
+
 	static std::string str;
 	str.clear();
 

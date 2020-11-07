@@ -25,28 +25,46 @@ TSLanguage* g_jaiLang;
 Constants g_constants;
 
 static char names[1000];
-export long long UpdateTree(Hash documentHash);
+export long long UpdateTree(uint64_t hashValue);
 
 
 static void SetupBuiltInTypes()
 {
-	g_constants.builtInTypes[StringHash("bool")] =    new TypeKing{ .name = "bool" };
-	g_constants.builtInTypes[StringHash("float32")] = new TypeKing{ .name = "float32" };
-	g_constants.builtInTypes[StringHash("float")] = g_constants.builtInTypes[StringHash("float32")];
-	g_constants.builtInTypes[StringHash("float64")] = new TypeKing{ .name = "float64" };
-	g_constants.builtInTypes[StringHash("char")] =    new TypeKing{ .name = "char" };
-	g_constants.builtInTypes[StringHash("string")] =  new TypeKing{ .name = "string" }; // string has some members like data and length.
-	g_constants.builtInTypes[StringHash("s8")] =      new TypeKing{ .name = "s8" };
-	g_constants.builtInTypes[StringHash("s16")] =     new TypeKing{ .name = "s16" };
-	g_constants.builtInTypes[StringHash("s32")] =     new TypeKing{ .name = "s32" };
-	g_constants.builtInTypes[StringHash("s64")] =     new TypeKing{ .name = "s64" };
-	g_constants.builtInTypes[StringHash("int")] = g_constants.builtInTypes[StringHash("s64")]; // s64?
-	g_constants.builtInTypes[StringHash("u8")] =      new TypeKing{ .name = "u8" };
-	g_constants.builtInTypes[StringHash("u16")] =     new TypeKing{ .name = "u16" };
-	g_constants.builtInTypes[StringHash("u32")] =     new TypeKing{ .name = "u32" };
-	g_constants.builtInTypes[StringHash("u64")] =     new TypeKing{ .name = "u64" };
-	g_constants.builtInTypes[StringHash("void")] =    new TypeKing{ .name = "void" };
+	g_constants.builtInTypes[StringHash("bool")] =			TypeHandle{ .fileIndex = UINT16_MAX, .index = 0 };
+	g_constants.builtInTypes[StringHash("float32")] =		TypeHandle{ .fileIndex = UINT16_MAX, .index = 1 };
+	g_constants.builtInTypes[StringHash("float")] =	  		TypeHandle{ .fileIndex = UINT16_MAX, .index = 1 };
+	g_constants.builtInTypes[StringHash("float64")] = 		TypeHandle{ .fileIndex = UINT16_MAX, .index = 2 };
+	g_constants.builtInTypes[StringHash("char")] =    		TypeHandle{ .fileIndex = UINT16_MAX, .index = 3 };
+	g_constants.builtInTypes[StringHash("string")] =  		TypeHandle{ .fileIndex = UINT16_MAX, .index = 4 };
+	g_constants.builtInTypes[StringHash("s8")] =      		TypeHandle{ .fileIndex = UINT16_MAX, .index = 5 };
+	g_constants.builtInTypes[StringHash("s16")] =     		TypeHandle{ .fileIndex = UINT16_MAX, .index = 6 };
+	g_constants.builtInTypes[StringHash("s32")] =     		TypeHandle{ .fileIndex = UINT16_MAX, .index = 7 };
+	g_constants.builtInTypes[StringHash("s64")] =     		TypeHandle{ .fileIndex = UINT16_MAX, .index = 8 };
+	g_constants.builtInTypes[StringHash("int")] =	  		TypeHandle{ .fileIndex = UINT16_MAX, .index = 8 };
+	g_constants.builtInTypes[StringHash("u8")] =      		TypeHandle{ .fileIndex = UINT16_MAX, .index = 9 };
+	g_constants.builtInTypes[StringHash("u16")] =     		TypeHandle{ .fileIndex = UINT16_MAX, .index = 10 };
+	g_constants.builtInTypes[StringHash("u32")] =     		TypeHandle{ .fileIndex = UINT16_MAX, .index = 11 };
+	g_constants.builtInTypes[StringHash("u64")] =     		TypeHandle{ .fileIndex = UINT16_MAX, .index = 12 };
+	g_constants.builtInTypes[StringHash("void")] =    		TypeHandle{ .fileIndex = UINT16_MAX, .index = 13 };
 
+	g_constants.builtInTypesByIndex[0] =  TypeKing{ .name = "bool" };
+	g_constants.builtInTypesByIndex[1] = TypeKing{ .name = "float32" };
+	g_constants.builtInTypesByIndex[2] = TypeKing{ .name = "float64" };
+	g_constants.builtInTypesByIndex[3] = TypeKing{ .name = "char" };
+	g_constants.builtInTypesByIndex[4] = TypeKing{ .name = "string" }; // string has some members like data and length.
+	g_constants.builtInTypesByIndex[4].members = new Scope();
+	g_constants.builtInTypesByIndex[4].members->Add(StringHash("data"), ScopeDeclaration());
+	g_constants.builtInTypesByIndex[4].members->Add(StringHash("count"), ScopeDeclaration());
+
+	g_constants.builtInTypesByIndex[5] = TypeKing{ .name = "s8" };
+	g_constants.builtInTypesByIndex[6] = TypeKing{ .name = "s16" };
+	g_constants.builtInTypesByIndex[7] = TypeKing{ .name = "s32" };
+	g_constants.builtInTypesByIndex[8] = TypeKing{ .name = "s64" };
+	g_constants.builtInTypesByIndex[9] = TypeKing{ .name = "u8" };
+	g_constants.builtInTypesByIndex[10] = TypeKing{ .name = "u16" };
+	g_constants.builtInTypesByIndex[11] = TypeKing{ .name = "u32" };
+	g_constants.builtInTypesByIndex[12] = TypeKing{ .name = "u64" };
+	g_constants.builtInTypesByIndex[13] = TypeKing{ .name = "void" };
 }
 
 export int Init()
@@ -298,9 +316,10 @@ export GapBuffer* GetGapBuffer(Hash document)
 	return g_buffers.Read(document).value();
 }
 
-export long long EditTree(Hash documentHash, const char* change, int startLine, int startCol, int endLine, int endCol, int contentLength, int rangeLength)
+export long long EditTree(uint64_t hashValue, const char* change, int startLine, int startCol, int endLine, int endCol, int contentLength, int rangeLength)
 {
 	auto timer = Timer("");
+	auto documentHash = Hash{ .value = hashValue };
 
 	auto buffer = g_buffers.Read(documentHash).value();
 	auto edit = buffer->Edit(startLine, startCol, endLine, endCol, change, contentLength, rangeLength);
@@ -417,12 +436,12 @@ export long long CreateTree(const char* documentPath, const char* code, int leng
 	
 	auto fileScope = g_fileScopes.Read(documentHash).value();
 	
-	/*
+	
 	for (auto load : fileScope->loads)
 	{
 		HandleLoad(load);
 	}
-	*/
+	
 
 	return timer.GetMicroseconds();
 }
@@ -430,9 +449,10 @@ export long long CreateTree(const char* documentPath, const char* code, int leng
 
 
 // applies edits!
-export long long UpdateTree(Hash documentHash)
+export long long UpdateTree(uint64_t hashValue)
 {
 	auto timer = Timer("");
+	auto documentHash = Hash{ .value = hashValue };
 
 	auto buffer = g_buffers.Read(documentHash).value();;
 	auto tree = g_trees.Read(documentHash).value();
@@ -472,9 +492,10 @@ export long long UpdateTree(Hash documentHash)
 
 
 
-export long long GetTokens(Hash documentHash, SemanticToken** outTokens, int* count)
+export long long GetTokens(uint64_t hashValue, SemanticToken** outTokens, int* count)
 {
 	auto t = Timer("");
+	auto documentHash = Hash{ .value = hashValue };
 	auto fileScope = g_fileScopes.Read(documentHash).value();
 	*outTokens = fileScope->tokens.data();
 	*count = fileScope->tokens.size();

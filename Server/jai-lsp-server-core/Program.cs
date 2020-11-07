@@ -50,7 +50,7 @@ namespace jai_lsp
                         .SetMinimumLevel(LogLevel.Error))
 #endif
                     .WithHandler<SignatureHelper>()
-                    //.WithHandler<Definer>()
+                    .WithHandler<Definer>()
                     .WithHandler<Hoverer>()
                     .WithHandler<TextDocumentHandler>()
                     .WithHandler<CompletionHandler>()

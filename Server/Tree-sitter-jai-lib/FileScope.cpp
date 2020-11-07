@@ -70,20 +70,6 @@ static const TypeKing* GetGlobalType(TypeHandle handle)
 	return g_fileScopeByIndex[handle.fileIndex]->GetType(handle);
 }
 
-std::optional<ScopeDeclaration> FileScope::GetRightHandSideDecl(TSNode lhsDeclNode, Hash rhsHash, std::vector<Scope*>& scopeKing)
-{
-	auto lhsType = EvaluateNodeExpressionType(lhsDeclNode, buffer, scopeKing[scopeKing.size() - 1], scopeKing, this);
-	if (lhsType)
-	{
-		auto typeScope = g_fileScopeByIndex[lhsType->fileIndex];
-		auto typeKing = typeScope->GetType(*lhsType);
-		auto rhsDecl = typeKing->members->TryGet(rhsHash);
-		return rhsDecl;
-	}
-
-	return std::nullopt;
-}
-
 void FileScope::HandleMemberReference(TSNode lhsNode, TSNode rhsNode, std::vector<Scope*>& scopeKing, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex, std::unordered_map<Hash, TSNode>& parameters)
 {
 	auto lhsHash = GetIdentifierHash(lhsNode, buffer);
@@ -113,57 +99,6 @@ void FileScope::HandleMemberReference(TSNode lhsNode, TSNode rhsNode, std::vecto
 	tokens.push_back(token);
 	return;
 
-	/*
-	if (parameters.size() > 0)
-	{
-		auto it = parameters.find(lhsHash);
-
-		if (it != parameters.end())
-		{
-			auto rhsDecl = GetRightHandSideDecl(it->second, rhsHash, scopeKing);
-			if (rhsDecl)
-			{
-				token.type = GetTokenTypeFromFlags(rhsDecl->flags);
-				goto done;
-			}
-		}
-	}
-
-	for (int sp = 0; sp < scopeKing.size(); sp++)
-	{
-		int index = scopeKing.size() - sp - 1;
-		auto frame = scopeKing[index];
-		if (auto decl = frame->TryGet(lhsHash))
-		{
-			if (decl->type.fileIndex == UINT16_MAX)
-				goto bad;
-				
-			auto lhsType = GetGlobalType(decl->type);
-			auto rhsDecl = lhsType->members->TryGet(rhsHash);
-			if (rhsDecl)
-			{
-				token.type = GetTokenTypeFromFlags(rhsDecl->flags);
-				goto done;
-			}
-		}
-	}
-
-	// search modules
-	if (auto decl = SearchModules(lhsHash))
-	{
-		if (decl->type.fileIndex == UINT16_MAX)
-			goto bad;
-
-		auto lhsType = GetGlobalType(decl->type);
-		auto rhsDecl = lhsType->members->TryGet(rhsHash);
-		if (rhsDecl)
-		{
-			token.type = GetTokenTypeFromFlags(rhsDecl->flags);
-			goto done;
-		}
-	}
-	*/
-
 }
 
 
@@ -179,6 +114,14 @@ void FileScope::HandleVariableReference(TSNode node, std::vector<Scope*>& scopeK
 	token.line = start.row;
 	token.length = end.column - start.column;
 	token.modifier = (TokenModifier)0;
+
+
+	if (g_constants.builtInTypes.contains(hash))
+	{
+		token.type = TokenType::EnumMember;
+		goto done;
+	}
+
 
 	if (parameters.size() > 0)
 	{
@@ -409,7 +352,7 @@ void FileScope::FindDeclarations(TSNode scopeNode, Scope* scope, std::vector<Sco
 	{
 		auto& unresolved = unresolvedNodes[i];
 		auto exprType = EvaluateNodeExpressionType(std::get<1>(unresolved), buffer, scope, scopeKing, this);
-		if (exprType && exprType.value().fileIndex != UINT16_MAX)
+		if (exprType && exprType.value() != TypeHandle::Null() )
 		{
 			auto handle = exprType.value();
 			scope->UpdateType(std::get<0>(unresolved), handle);
@@ -711,15 +654,22 @@ const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode nod
 	auto symbol = ts_node_symbol(node);
 	auto hash = GetIdentifierHash(node, buffer);
 
+	/*
 	if (symbol == g_constants.builtInType)
 	{
 		// built in types need to get addded to the global type king holder.
 		//return g_constants.builtInTypes[hash];
 	}
-	else if (symbol == g_constants.identifier)
+	*/
+	if (symbol == g_constants.identifier)
 	{
-		// identifier of some kind. struct, union, or enum.
+		// identifier of some kind. struct, union, or enum, or also a built in type now. we don't treat those differently than identifiers.
 
+		auto it = g_constants.builtInTypes.find(hash);
+		if (it != g_constants.builtInTypes.end()) //  hope this isn't too slow.
+		{
+			return it->second;
+		}
 
 		if (auto decl = current->TryGet(hash))
 		{

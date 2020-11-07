@@ -1,5 +1,6 @@
 #pragma once
 #include "TreeSitterJai.h"
+#include <assert.h>
 
 struct FileScope
 {
@@ -33,8 +34,6 @@ struct FileScope
 	std::optional<ScopeDeclaration> SearchModules(Hash identifierHash);
 	std::optional<ScopeDeclaration> Search(Hash identifierHash);
 
-	std::optional<ScopeDeclaration> GetRightHandSideDecl(TSNode lhsDeclNode, Hash rhsHash, std::vector<Scope*>& scopeKing);
-
 
 
 	TypeHandle AllocateType()
@@ -45,7 +44,18 @@ struct FileScope
 
 	const TypeKing* GetType(TypeHandle handle) const
 	{
-		return &types[handle.index];
+		assert(handle != TypeHandle::Null());
+
+		if (handle.fileIndex == UINT16_MAX && handle.index != UINT16_MAX)
+		{
+			// built in type.
+			return &g_constants.builtInTypesByIndex[handle.index];
+		}
+
+		if(handle.fileIndex == fileIndex)
+			return &types[handle.index];
+
+		return &g_fileScopeByIndex[handle.fileIndex]->types[handle.index];
 	}
 
 

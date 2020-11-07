@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace jai_lsp
 {
-    class Definer: DefinitionHandler
+    class Definer: IDefinitionHandler
     {
         HashNamer hashNamer;
         ILogger _logger;
@@ -23,12 +23,11 @@ namespace jai_lsp
         );
 
 
-        public Definer(ILogger<TextDocumentHandler> logger, HashNamer hashNamer, DefinitionRegistrationOptions options) : base (options)
+        public Definer(ILogger<TextDocumentHandler> logger, HashNamer hashNamer)
         {
             _logger = logger;
             this.hashNamer = hashNamer;
-            options.DocumentSelector = _documentSelector;
-            options.WorkDoneProgress = false;
+            
         }
 
        
@@ -47,7 +46,7 @@ namespace jai_lsp
             return r;
         }
 
-        public override Task<LocationOrLocationLinks> Handle(DefinitionParams request, CancellationToken cancellationToken)
+        public Task<LocationOrLocationLinks> Handle(DefinitionParams request, CancellationToken cancellationToken)
         {
             var hash = Hash.StringHash(request.TextDocument.Uri.GetFileSystemPath());
             TreeSitter.FindDefinition(hash, request.Position.Line, request.Position.Character, out var defHash, out var origin, out var target, out var selection);
@@ -66,11 +65,18 @@ namespace jai_lsp
             return Task.FromResult(new LocationOrLocationLinks());
         }
 
-        public override void SetCapability(DefinitionCapability capability)
+        public void SetCapability(DefinitionCapability capability)
         {
             capability.LinkSupport = true;
         }
- 
+
+        public DefinitionRegistrationOptions GetRegistrationOptions()
+        {
+            DefinitionRegistrationOptions options = new DefinitionRegistrationOptions();
+            options.DocumentSelector = _documentSelector;
+            options.WorkDoneProgress = false;
+            return options;
+        }
     }
 
 

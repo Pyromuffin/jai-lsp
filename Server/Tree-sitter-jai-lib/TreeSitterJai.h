@@ -18,7 +18,7 @@ enum class TokenType : uint8_t
 	Comment,
 	Keyword,
 	String,
-	Number,
+	Number, // light green, like a constant.
 	Regexp,
 	Operator,
 	Namespace,
@@ -35,7 +35,7 @@ enum class TokenType : uint8_t
 	Variable,
 	Parameter,
 	Label,
-	EnumMember,
+	EnumMember, // keyword blue
 };
 
 enum class TokenModifier : uint8_t
@@ -45,8 +45,8 @@ enum class TokenModifier : uint8_t
 	Definition = 1 << 2,
 	Static = 1 << 3,
 	Abstract = 1 << 4,
-	Deprecated = 1 << 5,
-	Readonly = 1 << 6,
+	Deprecated = 1 << 5, // seems to effect variables to be dark grey
+	Readonly = 1 << 6, // seems to effect variables to be darker blue
 };
 
 struct SemanticToken
@@ -80,7 +80,12 @@ struct TypeHandle
 
 	static constexpr TypeHandle Null()
 	{
-		return TypeHandle{ .fileIndex = UINT16_MAX, .index = 0 };
+		return TypeHandle{ .fileIndex = UINT16_MAX, .index = UINT16_MAX };
+	}
+
+	bool operator==(const TypeHandle& rhs)
+	{
+		return fileIndex == rhs.fileIndex && index == rhs.index;
 	}
 
 };
@@ -386,7 +391,8 @@ struct Constants
 	TSSymbol scopeExport;
 	TSSymbol dataScope;
 
-	std::unordered_map<Hash, TypeKing*> builtInTypes;
+	std::unordered_map<Hash, TypeHandle> builtInTypes;
+	TypeKing builtInTypesByIndex[14];
 };
 
 extern Constants g_constants;

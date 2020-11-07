@@ -26,8 +26,11 @@ static Range NodeToRange(TSNode node)
 }
 
 
-export void FindDefinition(Hash documentName, int row, int col, Hash* outFileHash, Range* outOriginRange, Range* outTargetRange, Range* outSelectionRange)
+export void FindDefinition(uint64_t hashValue, int row, int col, uint64_t* outFileHash, Range* outOriginRange, Range* outTargetRange, Range* outSelectionRange)
 {
+	auto documentName = Hash{ .value = hashValue };
+
+
 	auto tree = ts_tree_copy(g_trees.Read(documentName).value());
 	auto root = ts_tree_root_node(tree);
 	auto buffer = g_buffers.Read(documentName).value();;
@@ -53,7 +56,7 @@ export void FindDefinition(Hash documentName, int row, int col, Hash* outFileHas
 
 	if (entry)
 	{
-		*outFileHash = documentName;
+		*outFileHash = documentName.value;
 		*outTargetRange = NodeToRange(parent);
 		// wow this is dumb but we're going to query the tree to get the node for the declaration offset! hope that offset isn't stale!
 		auto definitionNode = ts_node_named_descendant_for_byte_range(root, entry.value().startByte, entry.value().startByte + entry.value().length);
@@ -67,7 +70,7 @@ export void FindDefinition(Hash documentName, int row, int col, Hash* outFileHas
 		if (auto decl = fileScope->file.TryGet(identifierHash))
 		{
 			auto entry = decl.value();
-			*outFileHash = documentName;
+			*outFileHash = documentName.value;
 			auto definitionNode = ts_node_named_descendant_for_byte_range(root, entry.startByte, entry.startByte + entry.length);
 			*outTargetRange = NodeToRange(definitionNode);
 			*outSelectionRange = NodeToRange(definitionNode);
@@ -86,7 +89,7 @@ export void FindDefinition(Hash documentName, int row, int col, Hash* outFileHas
 						continue;
 
 					auto entry = decl.value();
-					*outFileHash = load;
+					*outFileHash = load.value;
 
 					auto loadedTree = ts_tree_copy(g_trees.Read(load).value());
 					auto loadedRoot = ts_tree_root_node(loadedTree);
@@ -117,7 +120,7 @@ export void FindDefinition(Hash documentName, int row, int col, Hash* outFileHas
 				auto loadedTree = ts_tree_copy(g_trees.Read(moduleScope->moduleFileHash).value());
 				auto loadedRoot = ts_tree_root_node(loadedTree);
 
-				*outFileHash = moduleScope->moduleFileHash;
+				*outFileHash = moduleScope->moduleFileHash.value;
 				auto definitionNode = ts_node_named_descendant_for_byte_range(loadedRoot, entry.startByte, entry.startByte);
 				*outTargetRange = NodeToRange(definitionNode);
 				*outSelectionRange = NodeToRange(definitionNode);
@@ -142,7 +145,7 @@ export void FindDefinition(Hash documentName, int row, int col, Hash* outFileHas
 						auto loadedTree = ts_tree_copy(g_trees.Read(load).value());
 						auto loadedRoot = ts_tree_root_node(loadedTree);
 
-						*outFileHash = load;
+						*outFileHash = load.value;
 						auto definitionNode = ts_node_named_descendant_for_byte_range(loadedRoot, entry.startByte, entry.startByte);
 						*outTargetRange = NodeToRange(definitionNode);
 						*outSelectionRange = NodeToRange(definitionNode);
@@ -157,6 +160,6 @@ export void FindDefinition(Hash documentName, int row, int col, Hash* outFileHas
 	}
 
 
-	*outFileHash = Hash{ 0 };
+	*outFileHash = 0;
 	ts_tree_delete(tree);
 }

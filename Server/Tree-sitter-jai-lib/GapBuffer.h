@@ -8,6 +8,9 @@ struct Hash
 {
     uint64_t value;
     bool operator==(Hash const& rOther) const { return value == rOther.value; }
+#if _DEBUG
+    std::string debug_name;
+#endif
 };
 
 
@@ -87,27 +90,50 @@ struct buffer_view
 inline Hash StringHash(std::string_view string)
 {
     uint64_t hash = 0xcbf29ce484222325ULL;
+    Hash h;
+
+#if _DEBUG
+    h.debug_name.reserve(string.length());
+#endif
+
 
     for (uint32_t i = 0; i < string.length(); i++)
     {
         hash = hash ^ string[i];
         hash = hash * 0x00000100000001B3ULL;
+
+#if _DEBUG
+        h.debug_name.push_back(string[i]);
+#endif
     }
 
-    return { hash };
+    h.value = hash;
+
+    return h;
 }
 
 inline Hash StringHash(buffer_view string)
 {
     uint64_t hash = 0xcbf29ce484222325ULL;
+    Hash h;
+
+#if _DEBUG
+    h.debug_name.reserve(string.length);
+#endif
 
     for (uint32_t i = 0; i < string.length; i++)
     {
         hash = hash ^ string.buffer->GetChar(string.start + i);
         hash = hash * 0x00000100000001B3ULL;
+
+#if _DEBUG
+        h.debug_name.push_back(string.buffer->GetChar(string.start + i));
+#endif
     }
 
-    return { hash };
+    h.value = hash;
+
+    return h;
 }
 
 
