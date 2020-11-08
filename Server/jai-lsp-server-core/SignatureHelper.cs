@@ -29,8 +29,6 @@ namespace jai_lsp
 
         public override Task<SignatureHelp> Handle(SignatureHelpParams request, CancellationToken cancellationToken)
         {
-            return Task.FromResult(new SignatureHelp());
-
             SignatureInformation info = new SignatureInformation();
             info.Label = "Taste(using juice : Juice)";
 

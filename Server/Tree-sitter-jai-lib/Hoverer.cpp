@@ -94,7 +94,7 @@ std::optional<ScopeDeclaration> EvaluateMemberAccess(TSNode node, FileScope* fil
 	auto rhsHash = GetIdentifierHash(rhs, buffer);
 	auto typeKing = GetType(lhsType->type);
 	
-	if (typeKing)
+	if (typeKing && typeKing->members)
 	{
 		if (auto rhsDecl = typeKing->members->TryGet(rhsHash))
 		{

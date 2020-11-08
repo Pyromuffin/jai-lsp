@@ -67,6 +67,14 @@ static void SetupBuiltInTypes()
 	g_constants.builtInTypesByIndex[13] = TypeKing{ .name = "void" };
 }
 
+
+static void SetupBuiltInFunctions()
+{
+	// some builtins:
+	// size_of
+	// type_of
+}
+
 export int Init()
 {
 	g_jaiLang = tree_sitter_jai();
@@ -86,6 +94,8 @@ export int Init()
 	g_constants.scopeExport = ts_language_symbol_for_name(g_jaiLang, "scope_export", strlen("scope_export"), true);
 	g_constants.dataScope = ts_language_symbol_for_name(g_jaiLang, "data_scope", strlen("data_scope"), true);
 	SetupBuiltInTypes();
+	SetupBuiltInFunctions();
+
 	return 69420;
 }
 
@@ -231,7 +241,7 @@ TokenType GetTokenTypeFromFlags(DeclarationFlags flags)
 }
 
 
-
+/*
 static void HandleUnresolvedReferences(std::vector<int>& unresolvedTokenIndex, std::vector<TSNode>& unresolvedEntry, GapBuffer* buffer, FileScope* fileScope)
 {
 	for (int i = 0; i < unresolvedTokenIndex.size(); i++)
@@ -286,7 +296,7 @@ static void HandleUnresolvedReferences(std::vector<int>& unresolvedTokenIndex, s
 		}
 	}
 }
-
+*/
 
 
 

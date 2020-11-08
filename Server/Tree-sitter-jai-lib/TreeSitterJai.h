@@ -59,6 +59,8 @@ struct SemanticToken
 };
 
 struct Scope;
+struct ScopeDeclaration;
+
 
 struct TypeKing
 {
@@ -70,6 +72,9 @@ struct TypeKing
 
 	std::string name;
 	Scope* members;
+
+	int parameterCount;
+	ScopeDeclaration* parameters;
 };
 
 

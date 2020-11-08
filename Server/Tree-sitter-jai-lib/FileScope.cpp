@@ -229,6 +229,7 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, Scope* currentScope, std:
 
 	if (expressionType == g_constants.constDecl)
 	{
+		//@TODO doesn't handle compound declarations.
 		flags = flags | DeclarationFlags::Constant;
 		auto hash = GetIdentifierHash(identifiers[0], buffer);
 
@@ -252,7 +253,20 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, Scope* currentScope, std:
 		unresolvedTypes.push_back(std::make_tuple(hash, cursor.Current()));
 	}
 	else if (expressionType == g_constants.funcDecl)
+	{
 		flags = flags | DeclarationFlags::Function;
+		
+		cursor.Child(); // cursor to header.
+		auto header = cursor.Current();
+
+		handle = AllocateType();
+		auto king = &types[handle.index];
+		king->name = GetIdentifierFromBufferCopy(header, buffer);
+
+		// get parameter decls.
+
+
+	}
 	else if (expressionType == g_constants.structDecl)
 	{
 		// allocate a new typeking
@@ -271,7 +285,10 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, Scope* currentScope, std:
 				king->name = GetIdentifierFromBufferCopy(identifiers[0], buffer); //@todo this is probably not ideal, allocating a string for every type name every time.
 				king->members = &scopes[scopeNode.id];
 				structs.push_back(scopeNode);
+
+				cursor.Sibling(); // skip "}"
 			}
+
 		}
 	}
 	else
