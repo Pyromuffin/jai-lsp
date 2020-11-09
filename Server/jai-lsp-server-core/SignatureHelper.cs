@@ -108,7 +108,7 @@ namespace jai_lsp
                 for(int i = 0; i < parameterCount; i++)
                 {
                     var paramInfo = new ParameterInformation();
-                    var paramPtr = System.Runtime.InteropServices.Marshal.ReadIntPtr(signatureArrayPtr + 8 * i); ;
+                    var paramPtr = System.Runtime.InteropServices.Marshal.ReadIntPtr(signatureArrayPtr + 8 * (i + 1)); ;
                     paramInfo.Label = System.Runtime.InteropServices.Marshal.PtrToStringAnsi(paramPtr);
                     paramList.Add(paramInfo);
                 }

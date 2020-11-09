@@ -686,9 +686,6 @@ void FileScope::Build()
 		}
 	}
 
-	//HandleUnresolvedReferences(unresolvedTokenIndex, unresolvedEntry, buffer, fileScope);
-
-	//ts_tree_delete(tree);
 	ts_query_delete(query);
 	ts_query_cursor_delete(queryCursor);
 }
