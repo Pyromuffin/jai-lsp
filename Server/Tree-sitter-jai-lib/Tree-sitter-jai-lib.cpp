@@ -73,6 +73,8 @@ static void SetupBuiltInFunctions()
 	// some builtins:
 	// size_of
 	// type_of
+	// assert
+
 }
 
 export int Init()
@@ -82,7 +84,7 @@ export int Init()
 	g_constants.constDecl = ts_language_symbol_for_name(g_jaiLang, "const_initializer", strlen("const_initializer"), true);
 	g_constants.varDecl = ts_language_symbol_for_name(g_jaiLang, "variable_initializer", strlen("variable_initializer"), true);
 	g_constants.import = ts_language_symbol_for_name(g_jaiLang, "import_statement", strlen("import_statement"), true);
-	g_constants.funcDecl = ts_language_symbol_for_name(g_jaiLang, "function_definition", strlen("function_definition"), true);
+	g_constants.funcDefinition = ts_language_symbol_for_name(g_jaiLang, "function_definition", strlen("function_definition"), true);
 	g_constants.structDecl = ts_language_symbol_for_name(g_jaiLang, "struct_definition", strlen("struct_definition"), true);
 	g_constants.memberAccess = ts_language_symbol_for_name(g_jaiLang, "member_access", strlen("member_access"), true);
 	g_constants.memberAccessNothing = ts_language_symbol_for_name(g_jaiLang, "member_access_nothing", strlen("member_access_nothing"), true);
@@ -93,6 +95,9 @@ export int Init()
 	g_constants.scopeFile = ts_language_symbol_for_name(g_jaiLang, "scope_file", strlen("scope_file"), true);
 	g_constants.scopeExport = ts_language_symbol_for_name(g_jaiLang, "scope_export", strlen("scope_export"), true);
 	g_constants.dataScope = ts_language_symbol_for_name(g_jaiLang, "data_scope", strlen("data_scope"), true);
+	g_constants.imperativeScope = ts_language_symbol_for_name(g_jaiLang, "imperative_scope", strlen("imperative_scope"), true);
+	g_constants.parameter = ts_language_symbol_for_name(g_jaiLang, "parameter", strlen("parameter"), true);
+
 	SetupBuiltInTypes();
 	SetupBuiltInFunctions();
 

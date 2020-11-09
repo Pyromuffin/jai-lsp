@@ -72,5 +72,12 @@ namespace jai_lsp
         [DllImport(dllpath)]
         extern static public IntPtr Hover(ulong documentName, int row, int col);
 
+        [DllImport(dllpath)]
+        extern static public IntPtr GetLine(ulong documentName, int row);
+
+        [DllImport(dllpath)]
+        extern static public void GetSignature(ulong hashValue, int row, int col, out IntPtr signature, out int parameterCount);
+
+
     }
 }

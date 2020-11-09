@@ -2,6 +2,15 @@
 #include "TreeSitterJai.h"
 #include <assert.h>
 
+
+
+struct ScopeStack
+{
+	std::vector<Scope*> scopes;
+};
+
+
+
 struct FileScope
 {
 	Hash documentHash;
@@ -14,6 +23,8 @@ struct FileScope
 	std::vector<SemanticToken> tokens;
 	const GapBuffer* buffer;
 	Scope file;
+
+	Cursor scope_builder_cursor;
 
 	void Clear()
 	{
@@ -46,7 +57,7 @@ struct FileScope
 	{
 		assert(handle != TypeHandle::Null());
 
-		if (handle.fileIndex == UINT16_MAX && handle.index != UINT16_MAX)
+		if (handle.fileIndex == UINT16_MAX && handle.index != UINT16_MAX) // prooobably make the built in types just their own file scope so we dont have to do these checks.
 		{
 			// built in type.
 			return &g_constants.builtInTypesByIndex[handle.index];
@@ -59,15 +70,17 @@ struct FileScope
 	}
 
 
-	void HandleMemberReference(TSNode lhsNode, TSNode rhsNode, std::vector<Scope*>& scopeKing, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex, std::unordered_map<Hash, TSNode>& parameters);
-	void HandleVariableReference(TSNode node, std::vector<Scope*>& scopeKing, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex, std::unordered_map<Hash, TSNode>& parameters);
-	void HandleNamedDecl(const TSNode nameNode, Scope* currentScope, std::vector<std::tuple<Hash, TSNode>>& unresolvedTypes, std::vector<Scope*>& scopeKing, std::vector<TSNode>& structs, bool exporting);
-	void FindDeclarations(TSNode scopeNode, Scope* scope, std::vector<Scope*>& scopeKing, bool& exporting);
-	void CreateScope(TSNode& node, std::unordered_map<Hash, TSNode>* parameters, std::vector<Scope*>& scopeKing, bool imperative, bool& exporting);
-	void CreateTopLevelScope(TSNode node, std::vector<Scope*>& scopeKing, bool& exporting);
+	void HandleMemberReference(TSNode rhsNode, ScopeStack& stack, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex);
+	void HandleVariableReference(TSNode node, ScopeStack& stack, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex);
+	void HandleNamedDecl(const TSNode nameNode, Scope* currentScope, std::vector<std::tuple<Hash, TSNode>>& unresolvedTypes, std::vector<std::pair<TSNode, TypeHandle>>& structs, bool exporting);
+	void FindDeclarations(TSNode scopeNode, Scope* scope, TypeHandle handle, ScopeStack& stack, bool& exporting);
+	void HandleFunctionDefnitionParameters(TSNode node, Scope* currentScope, TypeHandle handle, std::vector<std::tuple<Hash, TSNode>>& unresolvedNodes, Cursor& cursor);
+	TypeHandle HandleFuncDefinitionNode(TSNode node, std::vector<std::pair<TSNode, TypeHandle>>& structs, DeclarationFlags& flags);
+	void CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& exporting);
 	void Build();
 
-	const std::optional<TypeHandle> EvaluateNodeExpressionType(TSNode node, const GapBuffer* buffer, Scope* current, std::vector<Scope*>& scopeKing, FileScope* fileScope);
+	const std::optional<TypeHandle> EvaluateNodeExpressionType(TSNode node, const GapBuffer* buffer, Scope* current, ScopeStack& stack, FileScope* fileScope);
+
 
 
 };

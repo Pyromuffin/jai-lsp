@@ -191,6 +191,60 @@ const TypeKing* GetTypeForNode(TSNode node, FileScope* fileScope, GapBuffer* buf
 }
 
 
+export const char* GetLine(uint64_t hashValue, int row)
+{
+	thread_local std::string s;
+	s.clear();
+
+	auto documentName = Hash{ .value = hashValue };
+	auto buffer = g_buffers.Read(documentName).value();
+	buffer->GetRowCopy(row, s);
+
+	return s.c_str();
+}
+
+
+
+
+export void GetSignature(uint64_t hashValue, int row, int col, const char*** outSignature, int* outParameterCount)
+{
+	thread_local std::vector<const char*> strings;
+	strings.clear();
+
+	auto documentName = Hash{ .value = hashValue };
+
+	auto tree = ts_tree_copy(g_trees.Read(documentName).value());
+	auto root = ts_tree_root_node(tree);
+	auto buffer = g_buffers.Read(documentName).value();
+	auto fileScope = g_fileScopes.Read(documentName).value();
+
+	auto point = TSPoint{ static_cast<uint32_t>(row), static_cast<uint32_t>(col) };
+	auto node = ts_node_named_descendant_for_point_range(root, point, point);
+	if (ts_node_has_error(node))
+	{
+		node = ts_node_child(node, 0);
+	}
+
+	if (auto type = GetTypeForNode(node, fileScope, buffer))
+	{
+		ts_tree_delete(tree);
+		strings.push_back(type->name.c_str());
+
+		*outParameterCount = type->parameters.size();
+		for (auto& str : type->parameters)
+		{
+			strings.push_back(str.c_str());
+		}
+
+		*outSignature = strings.data();
+		return;
+	}
+
+	*outSignature = nullptr;
+	ts_tree_delete(tree);
+}
+
+
 export const char* Hover(uint64_t hashValue, int row, int col)
 {
 	auto documentName = Hash{ .value = hashValue };
@@ -202,7 +256,12 @@ export const char* Hover(uint64_t hashValue, int row, int col)
 
 	auto point = TSPoint{ static_cast<uint32_t>(row), static_cast<uint32_t>(col) };
 	auto node = ts_node_named_descendant_for_point_range(root, point, point);
-	
+	if (ts_node_has_error(node))
+	{
+		node = ts_node_child(node, 0);
+	}
+
+
 	if (auto type = GetTypeForNode(node, fileScope, buffer))
 	{
 		ts_tree_delete(tree);

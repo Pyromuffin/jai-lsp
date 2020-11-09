@@ -56,8 +56,8 @@ public:
     // this is slightly dangerous, because you can hold on to a string view for longer than it might be valid.
     // mostly just use this for module parsing and initial tree creation.
     std::string_view GetStringView(int start, int length);
-
     std::string_view GetEntireStringView();
+    void GetRowCopy(int row, std::string& s);
 
     /*
     The idea is that start and old_end describe the range of text that was removed,

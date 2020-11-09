@@ -77,6 +77,7 @@ void GapBuffer::Rewind()
 
 char GapBuffer::GetChar(int index) const
 {
+
     if (index < before.size())
     {
         return before[index];
@@ -160,6 +161,32 @@ std::string_view GapBuffer::GetEntireStringView()
     assert(IsRewound());
     auto view = std::string_view(&before[0], before.size());
     return view;
+}
+
+void GapBuffer::GetRowCopy(int row, std::string& s)
+{
+    if (row == currentLine)
+    {
+        s.reserve(currentCol);
+    }
+    else
+    {
+        Seek(row, 0);
+    }
+
+    auto currentByte = before.size();
+    auto lineStart = currentByte - currentCol;
+    int index = 0;
+    while ( (lineStart + index) < (before.size() + after.size()) )
+    {
+        auto character = GetChar(lineStart + index);
+        if ( character == '\n')
+            break;
+
+        s.push_back(character);
+
+        index++;
+    }
 }
 
 

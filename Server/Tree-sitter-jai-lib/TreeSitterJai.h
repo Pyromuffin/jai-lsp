@@ -71,10 +71,8 @@ struct TypeKing
 	};
 
 	std::string name;
+	std::vector<std::string> parameters;
 	Scope* members;
-
-	int parameterCount;
-	ScopeDeclaration* parameters;
 };
 
 
@@ -98,6 +96,7 @@ struct TypeHandle
 
 enum DeclarationFlags : uint8_t
 {
+	None = 0,
 	Exported = 1 << 0,
 	Constant = 1 << 1,
 	Struct = 1 << 2,
@@ -112,7 +111,7 @@ struct ScopeDeclaration
 	uint16_t length;
 	uint16_t fileIndex;
 	uint32_t startByte;
-	TypeHandle type; 
+	TypeHandle type;
 };
 
 
@@ -376,6 +375,12 @@ struct Cursor
 	{
 		return ts_tree_cursor_goto_parent(&cursor);
 	}
+
+	TSSymbol Symbol()
+	{
+		return ts_node_symbol(Current());
+	}
+
 };
 
 
@@ -384,7 +389,7 @@ struct Constants
 	TSSymbol constDecl;
 	TSSymbol import;
 	TSSymbol varDecl;
-	TSSymbol funcDecl;
+	TSSymbol funcDefinition;
 	TSSymbol structDecl;
 	TSSymbol memberAccess;
 	TSSymbol memberAccessNothing;
@@ -395,6 +400,8 @@ struct Constants
 	TSSymbol scopeFile;
 	TSSymbol scopeExport;
 	TSSymbol dataScope;
+	TSSymbol imperativeScope;
+	TSSymbol parameter;
 
 	std::unordered_map<Hash, TypeHandle> builtInTypes;
 	TypeKing builtInTypesByIndex[14];
