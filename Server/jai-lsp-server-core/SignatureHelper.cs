@@ -23,7 +23,7 @@ namespace jai_lsp
                 new SignatureHelpRegistrationOptions()
                 {
                     DocumentSelector = DocumentSelector.ForLanguage("jai"),
-                    TriggerCharacters = new Container<string>("("),
+                    TriggerCharacters = new Container<string>("(", ","),
                     RetriggerCharacters = new Container<string>(",", ")")
                 }
             )
@@ -40,6 +40,8 @@ namespace jai_lsp
 
         public override Task<SignatureHelp> Handle(SignatureHelpParams request, CancellationToken cancellationToken)
         {
+
+            /*
             if (request.Context.IsRetrigger && request.Context.TriggerKind == SignatureHelpTriggerKind.TriggerCharacter && request.Context.TriggerCharacter == ",")
             {
                 var signatureHelp = request.Context.ActiveSignatureHelp;
@@ -105,11 +107,10 @@ namespace jai_lsp
             namer.server.ApplyWorkspaceEdit(parameters);
             */
 
-
             currentHash = Hash.StringHash(request.TextDocument.Uri.GetFileSystemPath());
 
             var pos = request.Position;
-            TreeSitter.GetSignature(currentHash, pos.Line, pos.Character - 1, out var signatureArrayPtr, out var parameterCount);
+            TreeSitter.GetSignature(currentHash, pos.Line, pos.Character, out var signatureArrayPtr, out var parameterCount, out var activeParameter);
 
             if (signatureArrayPtr.ToInt64() == 0)
                 return Task.FromResult(new SignatureHelp());
@@ -140,7 +141,7 @@ namespace jai_lsp
 
             SignatureHelp help = new SignatureHelp();
             help.Signatures = new Container<SignatureInformation>(info);
-            //help.ActiveParameter = 0;
+            help.ActiveParameter = activeParameter;
             help.ActiveSignature = 0;
 
      

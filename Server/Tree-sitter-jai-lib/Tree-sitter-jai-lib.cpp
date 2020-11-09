@@ -98,6 +98,7 @@ export int Init()
 	g_constants.imperativeScope = ts_language_symbol_for_name(g_jaiLang, "imperative_scope", strlen("imperative_scope"), true);
 	g_constants.parameter = ts_language_symbol_for_name(g_jaiLang, "parameter", strlen("parameter"), true);
 	g_constants.functionCall = ts_language_symbol_for_name(g_jaiLang, "func_call", strlen("func_call"), true);
+	g_constants.argument = ts_language_symbol_for_name(g_jaiLang, "argument", strlen("argument"), true);
 
 	SetupBuiltInTypes();
 	SetupBuiltInFunctions();
@@ -392,6 +393,7 @@ void IncrementalUpdate(TSTree* oldTree, TSTree* newTree)
 	free(ranges);
 }
 
+static std::mutex hope;
 
 
 export long long CreateTree(const char* documentPath, const char* code, int length)
@@ -442,8 +444,11 @@ export long long CreateTree(const char* documentPath, const char* code, int leng
 		scope->fileIndex = g_fileScopeByIndex.size();
 		scope->documentHash = documentHash;
 
-		// not thread safe
+		hope.lock(); // hope this fixes it!
+		// this is still not super thread safe because there's no lock around the people who are reading this array.
 		g_fileScopeByIndex.push_back(scope);
+		hope.unlock();
+
 		g_fileScopes.Write(documentHash, scope);
 		scope->Build();
 	}

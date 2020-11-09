@@ -76,7 +76,7 @@ namespace jai_lsp
         extern static public IntPtr GetLine(ulong documentName, int row);
 
         [DllImport(dllpath)]
-        extern static public void GetSignature(ulong hashValue, int row, int col, out IntPtr signature, out int parameterCount);
+        extern static public void GetSignature(ulong hashValue, int row, int col, out IntPtr signature, out int parameterCount, out int activeParameter);
 
 
     }

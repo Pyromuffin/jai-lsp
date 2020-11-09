@@ -403,6 +403,7 @@ struct Constants
 	TSSymbol imperativeScope;
 	TSSymbol parameter;
 	TSSymbol functionCall;
+	TSSymbol argument;
 
 	std::unordered_map<Hash, TypeHandle> builtInTypes;
 	TypeKing builtInTypesByIndex[14];

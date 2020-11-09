@@ -206,7 +206,7 @@ export const char* GetLine(uint64_t hashValue, int row)
 
 
 
-export void GetSignature(uint64_t hashValue, int row, int col, const char*** outSignature, int* outParameterCount)
+export void GetSignature(uint64_t hashValue, int row, int col, const char*** outSignature, int* outParameterCount, int* outActiveParameter)
 {
 	thread_local std::vector<const char*> strings;
 	strings.clear();
@@ -225,16 +225,23 @@ export void GetSignature(uint64_t hashValue, int row, int col, const char*** out
 		node = ts_node_child(node, 0);
 	}
 
-	// if this is a func_call, then get the identifier
-	auto symbol = ts_node_symbol(node);
-	if (symbol == g_constants.functionCall)
+	// go up looking for a function call
+	while (ts_node_symbol(node) != g_constants.functionCall)
 	{
-		node = ts_node_child(node, 0);
+		node = ts_node_parent(node);
+		if (ts_node_is_null(node))
+		{
+			*outSignature = nullptr;
+			ts_tree_delete(tree);
+			return;
+		}
 	}
+
+	int childCount = ts_node_child_count(node);
+	node = ts_node_child(node, 0); // get function name
 
 	if (auto type = GetTypeForNode(node, fileScope, buffer))
 	{
-		ts_tree_delete(tree);
 		strings.push_back(type->name.c_str());
 
 		*outParameterCount = type->parameters.size();
@@ -244,10 +251,32 @@ export void GetSignature(uint64_t hashValue, int row, int col, const char*** out
 		}
 
 		*outSignature = strings.data();
-		return;
+		*outActiveParameter = 0;
+
+		// iterate through arguments to find which parameter index we are.
+		int param = 0;
+		node = ts_node_next_sibling(node); // go to "("
+		auto startPos = ts_node_start_point(node);
+
+		for (int i = 0; i < childCount - 3; i++)
+		{
+			node = ts_node_next_sibling(node); // go to first parameter or comma
+			if (!ts_node_is_named(node))
+			{
+				// found a comma
+				auto commaPos = ts_node_start_point(node);
+				if (col <= commaPos.column && row <= commaPos.row)
+				{
+					break;
+				}
+				param++;
+			}
+		}
+
+		*outActiveParameter = param;
 	}
 
-	*outSignature = nullptr;
+
 	ts_tree_delete(tree);
 }
 
