@@ -7,6 +7,8 @@ using System.Collections.Generic;
 using MediatR.Pipeline;
 using System.Linq;
 using System;
+using OmniSharp.Extensions.LanguageServer.Protocol;
+using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;
 
 namespace jai_lsp
 {
@@ -38,7 +40,7 @@ namespace jai_lsp
 
         public override Task<SignatureHelp> Handle(SignatureHelpParams request, CancellationToken cancellationToken)
         {
-            if(request.Context.IsRetrigger && request.Context.TriggerKind == SignatureHelpTriggerKind.TriggerCharacter && request.Context.TriggerCharacter == ",") 
+            if (request.Context.IsRetrigger && request.Context.TriggerKind == SignatureHelpTriggerKind.TriggerCharacter && request.Context.TriggerCharacter == ",")
             {
                 var signatureHelp = request.Context.ActiveSignatureHelp;
                 signatureHelp.ActiveParameter++;
@@ -60,7 +62,7 @@ namespace jai_lsp
                 var line = System.Runtime.InteropServices.Marshal.PtrToStringAnsi(linePtr);
 
                 int commas = 0;
-                for(int i = 0; i < line.Length; i++)
+                for (int i = 0; i < line.Length; i++)
                 {
                     if (i == triggerPos)
                         break;
@@ -81,9 +83,28 @@ namespace jai_lsp
                 return Task.FromResult(new SignatureHelp());
             }
 
-
             triggerStartPosition = request.Position.Character;
             triggerStartLine = request.Position.Line;
+
+            /* leaving this here for posterity.
+             * 
+            // also! add a close parenthesis!
+            var edit = new WorkspaceEdit();
+            edit.Changes = new Dictionary<DocumentUri, IEnumerable<TextEdit>>();
+            var uri = request.TextDocument.Uri;
+            TextEdit textEdit = new TextEdit();
+            textEdit.NewText = ")";
+            var insertPos = request.Position;
+            insertPos.Character++;
+            textEdit.Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(insertPos, insertPos);
+            var array = new TextEdit[] { textEdit };
+
+            edit.Changes.Add(uri, array);
+            ApplyWorkspaceEditParams parameters = new ApplyWorkspaceEditParams();
+            parameters.Edit = edit;
+            namer.server.ApplyWorkspaceEdit(parameters);
+            */
+
 
             currentHash = Hash.StringHash(request.TextDocument.Uri.GetFileSystemPath());
 
@@ -95,17 +116,17 @@ namespace jai_lsp
 
             var signaturePtr = System.Runtime.InteropServices.Marshal.ReadIntPtr(signatureArrayPtr);
             var signature = System.Runtime.InteropServices.Marshal.PtrToStringAnsi(signaturePtr);
-            
+
 
             SignatureInformation info = new SignatureInformation();
             info.Label = signature;
 
-            
+
             var paramList = new List<ParameterInformation>();
 
             if (parameterCount > 0)
             {
-                for(int i = 0; i < parameterCount; i++)
+                for (int i = 0; i < parameterCount; i++)
                 {
                     var paramInfo = new ParameterInformation();
                     var paramPtr = System.Runtime.InteropServices.Marshal.ReadIntPtr(signatureArrayPtr + 8 * (i + 1)); ;
@@ -122,6 +143,7 @@ namespace jai_lsp
             //help.ActiveParameter = 0;
             help.ActiveSignature = 0;
 
+     
 
             return Task.FromResult(help);
         }

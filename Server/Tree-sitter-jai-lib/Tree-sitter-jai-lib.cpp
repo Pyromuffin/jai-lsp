@@ -97,6 +97,7 @@ export int Init()
 	g_constants.dataScope = ts_language_symbol_for_name(g_jaiLang, "data_scope", strlen("data_scope"), true);
 	g_constants.imperativeScope = ts_language_symbol_for_name(g_jaiLang, "imperative_scope", strlen("imperative_scope"), true);
 	g_constants.parameter = ts_language_symbol_for_name(g_jaiLang, "parameter", strlen("parameter"), true);
+	g_constants.functionCall = ts_language_symbol_for_name(g_jaiLang, "func_call", strlen("func_call"), true);
 
 	SetupBuiltInTypes();
 	SetupBuiltInFunctions();

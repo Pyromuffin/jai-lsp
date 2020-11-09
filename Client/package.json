@@ -38,12 +38,14 @@
                 }
             }
         },
+        
         "languages": [
             {
                 "id": "jai",
                 "extensions": [
                     "jai"
-                ]
+                ],
+            "configuration": "./language-configuration.json"
             }
         ]
     },

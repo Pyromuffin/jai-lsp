@@ -225,6 +225,13 @@ export void GetSignature(uint64_t hashValue, int row, int col, const char*** out
 		node = ts_node_child(node, 0);
 	}
 
+	// if this is a func_call, then get the identifier
+	auto symbol = ts_node_symbol(node);
+	if (symbol == g_constants.functionCall)
+	{
+		node = ts_node_child(node, 0);
+	}
+
 	if (auto type = GetTypeForNode(node, fileScope, buffer))
 	{
 		ts_tree_delete(tree);
