@@ -206,10 +206,13 @@ export const char* GetLine(uint64_t hashValue, int row)
 
 
 
-export void GetSignature(uint64_t hashValue, int row, int col, const char*** outSignature, int* outParameterCount, int* outActiveParameter)
+export void GetSignature(uint64_t hashValue, int row, int col, const char*** outSignature, int* outParameterCount, int* outActiveParameter, int* errorCount, Range** outErrors)
 {
 	thread_local std::vector<const char*> strings;
 	strings.clear();
+
+	thread_local std::vector<Range> errors;
+	errors.clear();
 
 	auto documentName = Hash{ .value = hashValue };
 
@@ -257,6 +260,8 @@ export void GetSignature(uint64_t hashValue, int row, int col, const char*** out
 		int param = 0;
 		node = ts_node_next_sibling(node); // go to "("
 		auto startPos = ts_node_start_point(node);
+		bool foundIt = false;
+		int parametersProvided = 0;
 
 		for (int i = 0; i < childCount - 3; i++)
 		{
@@ -267,12 +272,35 @@ export void GetSignature(uint64_t hashValue, int row, int col, const char*** out
 				auto commaPos = ts_node_start_point(node);
 				if (col <= commaPos.column && row <= commaPos.row)
 				{
-					break;
+					foundIt = true;
 				}
-				param++;
+
+				if(!foundIt)
+					param++;
+			}
+			else
+			{
+				// argument!
+				parametersProvided++;
+
+				if (parametersProvided > type->parameters.size())
+				{
+					auto errorStart = ts_node_start_point(node);
+					auto errorEnd = ts_node_start_point(node);
+
+					Range range;
+					range.startCol = errorStart.column;
+					range.startRow = errorStart.row;
+					range.endCol = errorEnd.column;
+					range.endRow = errorEnd.row;
+
+					errors.push_back(range);
+				}
 			}
 		}
 
+		*errorCount = errors.size();
+		*outErrors = errors.data();
 		*outActiveParameter = param;
 	}
 

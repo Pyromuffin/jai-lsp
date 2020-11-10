@@ -101,8 +101,9 @@ namespace jai_lsp
 
         private readonly ILogger _logger;
         HashNamer namer;
+        Diagnoser diagnoser;
 
-        public SemanticTokensHandler(ILogger<SemanticTokensHandler> logger, HashNamer namer) : base(
+        public SemanticTokensHandler(ILogger<SemanticTokensHandler> logger, HashNamer namer, Diagnoser diagnoser) : base(
             new SemanticTokensRegistrationOptions
             {
                 DocumentSelector = DocumentSelector.ForLanguage("jai"),
@@ -121,6 +122,7 @@ namespace jai_lsp
         {
             _logger = logger;
             this.namer = namer;
+            this.diagnoser = diagnoser;
         }
 
         public override async Task<SemanticTokens> Handle(
@@ -164,9 +166,7 @@ namespace jai_lsp
             var elapsed = then - now;
             _logger.LogInformation("Elapsed time for C++ tokens: " + elapsed.TotalMilliseconds + " native time: " + internalMicros);
 
-            PublishDiagnosticsParams diagnosticParams = new PublishDiagnosticsParams();
             List<Diagnostic> diagnostics = new List<Diagnostic>();
-            diagnosticParams.Uri = identifier.TextDocument.Uri;
 
             unsafe
             {
@@ -190,9 +190,8 @@ namespace jai_lsp
                 }
             }
 
-            diagnosticParams.Diagnostics = diagnostics;
-            // need to figure out how to publish diagnostics now.
-            namer.server.PublishDiagnostics(diagnosticParams);
+            diagnoser.Add(identifier.TextDocument.Uri, 0, diagnostics);
+            diagnoser.Publish(identifier.TextDocument.Uri);
         }
 
         protected override Task<SemanticTokensDocument>

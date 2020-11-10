@@ -16,9 +16,9 @@ namespace jai_lsp
     {
 
         HashNamer namer;
+        Diagnoser diagnoser;
 
-
-        public SignatureHelper(HashNamer namer) : base
+        public SignatureHelper(HashNamer namer, Diagnoser diagnoser) : base
             (
                 new SignatureHelpRegistrationOptions()
                 {
@@ -29,88 +29,17 @@ namespace jai_lsp
             )
         {
             this.namer = namer;
+            this.diagnoser = diagnoser;
         }
-
-
-        int triggerStartPosition = -1;
-        int triggerStartLine = -1;
-        ulong currentHash;
 
 
 
         public override Task<SignatureHelp> Handle(SignatureHelpParams request, CancellationToken cancellationToken)
         {
-
-            /*
-            if (request.Context.IsRetrigger && request.Context.TriggerKind == SignatureHelpTriggerKind.TriggerCharacter && request.Context.TriggerCharacter == ",")
-            {
-                var signatureHelp = request.Context.ActiveSignatureHelp;
-                signatureHelp.ActiveParameter++;
-                return Task.FromResult(signatureHelp);
-            }
-
-
-            if (request.Context.IsRetrigger && request.Context.TriggerKind == SignatureHelpTriggerKind.ContentChange)
-            {
-                var triggerPos = request.Position.Character;
-                var triggerLine = request.Position.Line;
-
-                if (triggerPos < triggerStartPosition || triggerLine != triggerStartLine)
-                {
-                    return Task.FromResult(new SignatureHelp());
-                }
-
-                var linePtr = TreeSitter.GetLine(currentHash, triggerLine);
-                var line = System.Runtime.InteropServices.Marshal.PtrToStringAnsi(linePtr);
-
-                int commas = 0;
-                for (int i = 0; i < line.Length; i++)
-                {
-                    if (i == triggerPos)
-                        break;
-
-                    if (line[i] == ',')
-                    {
-                        commas++;
-                    }
-                }
-
-                request.Context.ActiveSignatureHelp.ActiveParameter = commas;
-                return Task.FromResult(request.Context.ActiveSignatureHelp);
-            }
-
-
-            if (request.Context.TriggerCharacter == ")")
-            {
-                return Task.FromResult(new SignatureHelp());
-            }
-
-            triggerStartPosition = request.Position.Character;
-            triggerStartLine = request.Position.Line;
-
-            /* leaving this here for posterity.
-             * 
-            // also! add a close parenthesis!
-            var edit = new WorkspaceEdit();
-            edit.Changes = new Dictionary<DocumentUri, IEnumerable<TextEdit>>();
-            var uri = request.TextDocument.Uri;
-            TextEdit textEdit = new TextEdit();
-            textEdit.NewText = ")";
-            var insertPos = request.Position;
-            insertPos.Character++;
-            textEdit.Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(insertPos, insertPos);
-            var array = new TextEdit[] { textEdit };
-
-            edit.Changes.Add(uri, array);
-            ApplyWorkspaceEditParams parameters = new ApplyWorkspaceEditParams();
-            parameters.Edit = edit;
-            namer.server.ApplyWorkspaceEdit(parameters);
-            */
-
-            currentHash = Hash.StringHash(request.TextDocument.Uri.GetFileSystemPath());
+            var currentHash = Hash.StringHash(request.TextDocument.Uri.GetFileSystemPath());
 
             var pos = request.Position;
-            TreeSitter.GetSignature(currentHash, pos.Line, pos.Character, out var signatureArrayPtr, out var parameterCount, out var activeParameter);
+            TreeSitter.GetSignature(currentHash, pos.Line, pos.Character, out var signatureArrayPtr, out var parameterCount, out var activeParameter, out var errorCount, out var errorRanges);
 
             if (signatureArrayPtr.ToInt64() == 0)
                 return Task.FromResult(new SignatureHelp());
@@ -144,7 +73,33 @@ namespace jai_lsp
             help.ActiveParameter = activeParameter;
             help.ActiveSignature = 0;
 
-     
+   
+            if (errorCount > 0)
+            {
+                List<Diagnostic> diagnostics = new List<Diagnostic>();
+                PublishDiagnosticsParams diagnosticsParams = new PublishDiagnosticsParams();
+                diagnosticsParams.Uri = request.TextDocument.Uri;
+                unsafe
+                {
+                    for (int i = 0; i < errorCount; i++)
+                    {
+                        Range* errors = (Range*)errorRanges;
+                        var error = errors[i];
+                        Diagnostic diagnostic = new Diagnostic();
+                        diagnostic.Message = "Extra argument";
+                        diagnostic.Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(
+                            new Position(error.startLine, error.startCol), 
+                            new Position(error.endLine, error.endCol));
+                        diagnostics.Add(diagnostic);
+                    }
+                }
+
+                diagnoser.Add(request.TextDocument.Uri, 1, diagnostics);
+            }
+            else
+            {
+                diagnoser.Add(request.TextDocument.Uri, 1, new List<Diagnostic>() );
+            }
 
             return Task.FromResult(help);
         }

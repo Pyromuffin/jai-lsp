@@ -19,7 +19,6 @@ namespace jai_lsp
     public class HashNamer
     {
         public ConcurrentDictionary<ulong, string> hashToName = new ConcurrentDictionary<ulong, string>();
-        public ILanguageServer server;
     }
 
 

@@ -1,11 +1,7 @@
 #include "TreeSitterJai.h"
 #include "FileScope.h"
 
-struct Range
-{
-	int startRow, startCol;
-	int endRow, endCol;
-};
+
 
 static Range PointsToRange(TSPoint start, TSPoint end)
 {

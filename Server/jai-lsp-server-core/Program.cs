@@ -71,8 +71,8 @@ namespace jai_lsp
 
                             return new Logjam(logger);
                         })
-                        .AddSingleton<HashNamer>();
-                        
+                        .AddSingleton<HashNamer>()
+                        .AddSingleton<Diagnoser>();
                     })
                      
 
@@ -82,7 +82,9 @@ namespace jai_lsp
 
                         var logger = languageServer.Services.GetService<ILogger<Logjam>>();
                         var namer = languageServer.Services.GetService<HashNamer>();
-                        namer.server = languageServer;
+                        var diagnoser = languageServer.Services.GetService<Diagnoser>();
+                        diagnoser.server = languageServer;
+
                         WorkspaceFolderParams wsf = new WorkspaceFolderParams();
                         var wsfresults = await languageServer.Client.SendRequest(wsf, token);
             

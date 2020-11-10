@@ -114,6 +114,11 @@ struct ScopeDeclaration
 	TypeHandle type;
 };
 
+struct Range
+{
+	int startRow, startCol;
+	int endRow, endCol;
+};
 
 inline DeclarationFlags operator|(DeclarationFlags a, DeclarationFlags b)
 {

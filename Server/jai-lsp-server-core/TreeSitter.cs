@@ -29,8 +29,7 @@ namespace jai_lsp
         int beforeLength;
         byte* after;
         int afterLength;
-
-    }
+    };
 
 
     class TreeSitter
@@ -76,7 +75,7 @@ namespace jai_lsp
         extern static public IntPtr GetLine(ulong documentName, int row);
 
         [DllImport(dllpath)]
-        extern static public void GetSignature(ulong hashValue, int row, int col, out IntPtr signature, out int parameterCount, out int activeParameter);
+        extern static public void GetSignature(ulong hashValue, int row, int col, out IntPtr signature, out int parameterCount, out int activeParameter, out int parameterErrorCount, out IntPtr parameterErrorRanges );
 
 
     }
