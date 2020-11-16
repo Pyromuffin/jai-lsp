@@ -31,6 +31,6 @@
             "sourceMaps": true,
             "outFiles": ["${workspaceRoot}/out/test/**/*.js"],
             "preLaunchTask": "npm"
-        }
+        } 
     ]
 }

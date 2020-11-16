@@ -1,12 +1,14 @@
 #pragma once
 #include "TreeSitterJai.h"
 #include <assert.h>
+//#include "stb_ds.h"
+
 
 
 
 struct ScopeStack
 {
-	std::vector<Scope*> scopes;
+	std::vector<ScopeHandle> scopes;
 };
 
 
@@ -19,10 +21,21 @@ struct FileScope
 	std::vector<Hash> imports;
 	std::vector<Hash> loads;
 	std::vector<TypeKing> types;
-	std::unordered_map<const void*, Scope> scopes;
+	
+	std::vector<uint32_t> scopeOffsets;
+	std::vector<ScopeHandle> scopeOffsetHandles;
+
+	std::vector<Scope> scopeKings;
+	std::vector<ScopeHandle> scopeKingFreeList;
+
+	std::vector<uint64_t> scopePresentBitmap[2];
+	int whichBitmap = 0;
+
+	//Hashmap<const void*, ScopeHandle>  idToHandle;
+	std::unordered_map<const void*, ScopeHandle> _nodeToScopes;
 	std::vector<SemanticToken> tokens;
 	const GapBuffer* buffer;
-	Scope file;
+	ScopeHandle file;
 
 	Cursor scope_builder_cursor;
 
@@ -31,9 +44,14 @@ struct FileScope
 		imports.clear();
 		loads.clear();
 		types.clear();
-		scopes.clear();
+		_nodeToScopes.clear();
 		tokens.clear();
-		file.Clear();
+		scopeOffsets.clear();
+		scopeOffsetHandles.clear();
+		scopeKings.clear();
+		scopeKingFreeList.clear();
+		scopePresentBitmap[0].clear();
+		scopePresentBitmap[1].clear();
 	}
 
 
@@ -45,6 +63,63 @@ struct FileScope
 	std::optional<ScopeDeclaration> SearchModules(Hash identifierHash);
 	std::optional<ScopeDeclaration> Search(Hash identifierHash);
 
+	Scope* GetScope(ScopeHandle handle)
+	{
+		return &scopeKings[handle.index];
+	}
+
+	void ClearScopePresentBits()
+	{
+		whichBitmap = (whichBitmap + 1) % 2;
+
+		for (int i = 0; i < scopePresentBitmap[whichBitmap].size(); i++)
+		{
+			scopePresentBitmap[whichBitmap][i] = UINT64_MAX;
+		}
+	}
+
+	void SetScopePresentBit(ScopeHandle handle)
+	{
+		auto index = handle.index;
+		auto bitmapElement = index >> 6;
+		auto bitIndex = index % 64;
+		scopePresentBitmap[whichBitmap][bitmapElement] &= ~(1 << bitIndex);
+	}
+
+	bool ContainsScope(const void* id)
+	{
+		return _nodeToScopes.contains(id);
+	}
+
+	ScopeHandle GetScopeFromNodeID(const void* id)
+	{
+		assert(ContainsScope(id));
+		return _nodeToScopes[id];
+	}
+
+
+	ScopeHandle AllocateScope(TSNode node)
+	{
+		if (scopeKingFreeList.size() > 0)
+		{
+			auto back = scopeKingFreeList.back();
+			scopeKingFreeList.pop_back();
+			return back;
+		}
+
+		scopeKings.push_back(Scope());
+		auto numberOfBitwords = (scopeKings.size() >> 6) + 1;
+		if (numberOfBitwords > scopePresentBitmap[0].size())
+		{
+			scopePresentBitmap[0].push_back(UINT64_MAX);
+			scopePresentBitmap[1].push_back(UINT64_MAX);
+		}
+
+		auto handle = ScopeHandle{ .index = static_cast<uint16_t>(scopeKings.size() - 1) };
+		_nodeToScopes[node.id] = handle;
+
+		return handle;
+	}
 
 
 	TypeHandle AllocateType()
@@ -57,30 +132,66 @@ struct FileScope
 	{
 		assert(handle != TypeHandle::Null());
 
-		if (handle.fileIndex == UINT16_MAX && handle.index != UINT16_MAX) // prooobably make the built in types just their own file scope so we dont have to do these checks.
-		{
-			// built in type.
-			return &g_constants.builtInTypesByIndex[handle.index];
-		}
-
 		if(handle.fileIndex == fileIndex)
 			return &types[handle.index];
 
 		return &g_fileScopeByIndex[handle.fileIndex]->types[handle.index];
 	}
 
+	std::optional<ScopeDeclaration> TryGet(Hash hash) const
+	{
+		return scopeKings[file.index].TryGet(hash);
+	}
+
 
 	void HandleMemberReference(TSNode rhsNode, ScopeStack& stack, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex);
 	void HandleVariableReference(TSNode node, ScopeStack& stack, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex);
-	void HandleNamedDecl(const TSNode nameNode, Scope* currentScope, std::vector<std::tuple<Hash, TSNode>>& unresolvedTypes, std::vector<std::pair<TSNode, TypeHandle>>& structs, bool exporting);
-	void FindDeclarations(TSNode scopeNode, Scope* scope, TypeHandle handle, ScopeStack& stack, bool& exporting);
-	void HandleFunctionDefnitionParameters(TSNode node, Scope* currentScope, TypeHandle handle, std::vector<std::tuple<Hash, TSNode>>& unresolvedNodes, Cursor& cursor);
+	void HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope, std::vector<std::tuple<Hash, TSNode>>& unresolvedTypes, std::vector<std::pair<TSNode, TypeHandle>>& structs, bool exporting);
+	void FindDeclarations(TSNode scopeNode, ScopeHandle scope, TypeHandle handle, ScopeStack& stack, bool& exporting, bool rebuild = false);
+	void HandleFunctionDefnitionParameters(TSNode node, ScopeHandle currentScope, TypeHandle handle, std::vector<std::tuple<Hash, TSNode>>& unresolvedNodes, Cursor& cursor);
 	TypeHandle HandleFuncDefinitionNode(TSNode node, std::vector<std::pair<TSNode, TypeHandle>>& structs, DeclarationFlags& flags);
 	void CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& exporting);
 	void Build();
 
-	const std::optional<TypeHandle> EvaluateNodeExpressionType(TSNode node, const GapBuffer* buffer, Scope* current, ScopeStack& stack, FileScope* fileScope);
+	const std::optional<TypeHandle> EvaluateNodeExpressionType(TSNode node, const GapBuffer* buffer, ScopeHandle current, ScopeStack& stack);
 
+	static int EditStartByte(int start_byte, int new_start_byte, int new_end_byte, int old_end_byte )
+	{
+		if (start_byte >= old_end_byte) {
+			start_byte = new_end_byte + (start_byte - old_end_byte);
+		}
+		else if (start_byte > new_start_byte) {
+			start_byte = new_end_byte;
+		}
+
+		return start_byte;
+	}
+
+
+	int SearchScopeOffsets(int offset, const TSInputEdit& edit)
+	{
+
+		auto comp = [=](int a, int b) {
+
+			auto edited = EditStartByte(a, edit.start_byte, edit.new_end_byte, edit.old_end_byte);
+			return edited < b;
+		};
+
+		auto it = std::lower_bound(scopeOffsets.begin(), scopeOffsets.end(), offset, comp);
+
+		if (it == scopeOffsets.end() || *it != offset)
+		{
+			return -1;
+		}
+		else
+		{
+			int index = std::distance(scopeOffsets.begin(), it);
+			return index;
+		}
+	}
+
+
+	void RebuildScope(TSNode newScopeNode, TSInputEdit* edits, int editCount);
 
 
 };

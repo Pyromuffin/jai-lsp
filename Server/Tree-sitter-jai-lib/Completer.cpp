@@ -37,22 +37,23 @@ export const char* GetCompletionItems(uint64_t hashValue, int row, int col, Invo
 			node = child;
 	}
 
-	if (fileScope->scopes.contains(node.id))
+	if (fileScope->ContainsScope(node.id))
 	{
 		// we've invoked this on some empty space in a scope, so lets just print out whatever is in scope up to this point.
-		auto scope = &fileScope->scopes[node.id];
-		scope->AppendMembers(str, buffer);
+		auto scope = fileScope->GetScopeFromNodeID(node.id);
+		fileScope->GetScope(scope)->AppendMembers(str, buffer);
 
 		TSNode scopeScopeParent;
-		auto scopeScope = GetScopeAndParentForNode(node, fileScope, &scopeScopeParent);
-		while (scopeScope)
+		ScopeHandle scopeScope;
+		auto found = GetScopeAndParentForNode(node, fileScope, &scopeScopeParent, &scopeScope);
+		while (found)
 		{
-			scopeScope->AppendMembers(str, buffer);
-			scopeScope = GetScopeAndParentForNode(scopeScopeParent, fileScope, &scopeScopeParent);
+			fileScope->GetScope(scopeScope)->AppendMembers(str, buffer);
+			found = GetScopeAndParentForNode(scopeScopeParent, fileScope, &scopeScopeParent, &scopeScope);
 		}
 
 		// and append whatever is in file scope for good measure:
-		fileScope->file.AppendMembers(str, buffer);
+		fileScope->GetScope(fileScope->file)->AppendMembers(str, buffer);
 
 		// and append loads
 		for (auto load : fileScope->loads)
@@ -60,7 +61,7 @@ export const char* GetCompletionItems(uint64_t hashValue, int row, int col, Invo
 			if (auto loadedScope = g_fileScopes.Read(load))
 			{
 				auto loadedBuffer = g_buffers.Read(load).value();
-				loadedScope.value()->file.AppendExportedMembers(str, loadedBuffer);
+				(*loadedScope)->GetScope((*loadedScope)->file)->AppendExportedMembers(str, loadedBuffer);
 			}
 		}
 
@@ -72,7 +73,7 @@ export const char* GetCompletionItems(uint64_t hashValue, int row, int col, Invo
 				auto moduleFile = mod.value()->moduleFile;
 				auto mfHash = mod.value()->moduleFileHash;
 				auto importedBuffer = g_buffers.Read(mfHash).value();
-				moduleFile->file.AppendExportedMembers(str, importedBuffer);
+				moduleFile->GetScope(moduleFile->file)->AppendExportedMembers(str, importedBuffer);
 
 				// and double finally append all exported member for each loaded file.
 				for (auto load : moduleFile->loads)
@@ -80,7 +81,7 @@ export const char* GetCompletionItems(uint64_t hashValue, int row, int col, Invo
 					if (auto loadedScope = g_fileScopes.Read(load))
 					{
 						auto loadedBuffer = g_buffers.Read(load).value();
-						loadedScope.value()->file.AppendExportedMembers(str, loadedBuffer);
+						(*loadedScope)->GetScope((*loadedScope)->file)->AppendExportedMembers(str, loadedBuffer);
 					}
 				}
 			}
@@ -97,11 +98,12 @@ export const char* GetCompletionItems(uint64_t hashValue, int row, int col, Invo
 	{
 		if (auto type = GetType(decl->type))
 		{
-			if (type->members == nullptr)
+			auto memberScope = &g_fileScopeByIndex[decl->type.fileIndex]->scopeKings[type->members.index];
+			if (memberScope == nullptr)
 				return nullptr;
 	
 			auto bufferForType = g_fileScopeByIndex[decl->type.fileIndex]->buffer;
-			type->members->AppendMembers(str, bufferForType);
+			memberScope->AppendMembers(str, bufferForType);
 
 			return str.c_str();
 		}
@@ -111,20 +113,23 @@ export const char* GetCompletionItems(uint64_t hashValue, int row, int col, Invo
 	else
 	{
 		TSNode parent;
-		auto scope = GetScopeAndParentForNode(node, fileScope, &parent);
-		if (scope)
+		ScopeHandle scope;
+		auto found = GetScopeAndParentForNode(node, fileScope, &parent, &scope);
+		if (found)
 		{
-			scope->AppendMembers(str, buffer);
+			fileScope->GetScope(scope)->AppendMembers(str, buffer);
 			TSNode scopeScopeParent;
-			auto scopeScope = GetScopeAndParentForNode(parent, fileScope, &scopeScopeParent);
-			while (scopeScope)
+			ScopeHandle scopeScope;
+			found = GetScopeAndParentForNode(parent, fileScope, &scopeScopeParent, &scopeScope);
+
+			while (found)
 			{
-				scopeScope->AppendMembers(str, buffer);
-				scopeScope = GetScopeAndParentForNode(scopeScopeParent, fileScope, &scopeScopeParent);
+				fileScope->GetScope(scopeScope)->AppendMembers(str, buffer);
+				found = GetScopeAndParentForNode(scopeScopeParent, fileScope, &scopeScopeParent, &scopeScope);
 			}
 
 			// and append whatever is in file scope for good measure:
-			fileScope->file.AppendMembers(str, buffer);
+			fileScope->GetScope(fileScope->file)->AppendMembers(str, buffer);
 
 			// and append loads
 			for (auto load : fileScope->loads)
@@ -132,7 +137,7 @@ export const char* GetCompletionItems(uint64_t hashValue, int row, int col, Invo
 				if (auto loadedScope = g_fileScopes.Read(load))
 				{
 					auto loadedBuffer = g_buffers.Read(load).value();
-					loadedScope.value()->file.AppendExportedMembers(str, loadedBuffer);
+					(*loadedScope)->GetScope((*loadedScope)->file)->AppendExportedMembers(str, loadedBuffer);
 				}
 			}
 
@@ -144,7 +149,7 @@ export const char* GetCompletionItems(uint64_t hashValue, int row, int col, Invo
 					auto moduleFile = mod.value()->moduleFile;
 					auto mfHash = mod.value()->moduleFileHash;
 					auto importedBuffer = g_buffers.Read(mfHash).value();
-					moduleFile->file.AppendExportedMembers(str, importedBuffer);
+					moduleFile->GetScope(moduleFile->file)->AppendExportedMembers(str, importedBuffer);
 
 					// and double finally append all exported member for each loaded file.
 					for (auto load : moduleFile->loads)
@@ -152,7 +157,7 @@ export const char* GetCompletionItems(uint64_t hashValue, int row, int col, Invo
 						if (auto loadedScope = g_fileScopes.Read(load))
 						{
 							auto loadedBuffer = g_buffers.Read(load).value();
-							loadedScope.value()->file.AppendExportedMembers(str, loadedBuffer);
+							(*loadedScope)->GetScope((*loadedScope)->file)->AppendExportedMembers(str, loadedBuffer);
 						}
 					}
 

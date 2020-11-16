@@ -61,6 +61,10 @@ struct SemanticToken
 struct Scope;
 struct ScopeDeclaration;
 
+struct ScopeHandle
+{
+	uint16_t index;
+};
 
 struct TypeKing
 {
@@ -72,9 +76,8 @@ struct TypeKing
 
 	std::string name;
 	std::vector<std::string> parameters;
-	Scope* members;
+	ScopeHandle members;
 };
-
 
 struct TypeHandle
 {
@@ -111,7 +114,8 @@ struct ScopeDeclaration
 	uint16_t length;
 	uint16_t fileIndex;
 	uint32_t startByte;
-	TypeHandle type;
+	TypeHandle
+		type;
 };
 
 struct Range
@@ -129,10 +133,13 @@ constexpr auto size = sizeof(ScopeDeclaration);
 #define SMALL true
 
 
-struct Scope
+
+constexpr auto hashmapSize = sizeof(std::unordered_map<Hash, ScopeDeclaration>);
+
+struct alignas(64) Scope
 {
 	static constexpr int small_size = 8;
-	
+
 private:
 #if SMALL
 	Hash small_hashes[small_size];
@@ -142,14 +149,19 @@ private:
 	int size;
 
 public:
+	TSNode node;
+	TypeHandle associatedType = TypeHandle::Null();
 	bool imperative;
+
 	void Clear()
 	{
 		size = 0;
+		node = { 0 };
+		//associatedType = TypeHandle::Null();
 		declarations.clear();
 	}
 
-	std::optional<ScopeDeclaration> TryGet(const Hash hash)
+	std::optional<ScopeDeclaration> TryGet(const Hash hash) const
 	{
 #if SMALL
 		if (size < small_size)
@@ -198,7 +210,7 @@ public:
 	}
 
 
-	void AppendMembers(std::string& str, const GapBuffer* buffer, uint32_t upTo = UINT_MAX)
+	void AppendMembers(std::string& str, const GapBuffer* buffer, uint32_t upTo = UINT_MAX) const
 	{
 #if SMALL
 		if (size < small_size)
@@ -221,6 +233,9 @@ public:
 
 		for (auto& kvp : declarations)
 		{
+			if (kvp.second.flags & DeclarationFlags::BuiltIn)
+				continue;
+
 			if (imperative && (int)kvp.second.startByte > upTo)
 				continue;
 
@@ -282,9 +297,11 @@ public:
 
 		declarations[hash].type = type;
 	}
+
+	
 };
 
-
+constexpr auto scopeSize = sizeof(Scope);
 
 
 
@@ -396,6 +413,8 @@ struct Constants
 	TSSymbol varDecl;
 	TSSymbol funcDefinition;
 	TSSymbol structDecl;
+	TSSymbol enumDecl;
+	TSSymbol unionDecl;
 	TSSymbol memberAccess;
 	TSSymbol memberAccessNothing;
 	TSSymbol load;
@@ -409,9 +428,7 @@ struct Constants
 	TSSymbol parameter;
 	TSSymbol functionCall;
 	TSSymbol argument;
-
-	std::unordered_map<Hash, TypeHandle> builtInTypes;
-	TypeKing builtInTypesByIndex[14];
+	TSSymbol usingStatement;
 };
 
 extern Constants g_constants;
@@ -420,12 +437,12 @@ extern ConcurrentDictionary<GapBuffer*> g_buffers;
 extern ConcurrentDictionary<std::string> g_filePaths;
 extern std::vector<const FileScope*> g_fileScopeByIndex;
 
-
+std::string DebugNode(const TSNode& node, const GapBuffer* gb);
 std::string_view GetIdentifier(const TSNode& node, std::string_view code);
 Hash GetIdentifierHash(const TSNode& node, std::string_view code);
 Hash GetIdentifierHash(const TSNode& node, const GapBuffer* buffer);
-Scope* GetScopeForNode(const TSNode& node, FileScope* scope);
-Scope* GetScopeAndParentForNode(const TSNode& node, FileScope* scope, TSNode* outParentNode);
+bool GetScopeForNode(const TSNode& node, FileScope* scope, ScopeHandle* handle);
+bool GetScopeAndParentForNode(const TSNode& node, FileScope* scope, TSNode* outParentNode, ScopeHandle* handle);
 std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fileScope, const GapBuffer* buffer);
 const TypeKing* GetTypeForNode(TSNode node, FileScope* fileScope, GapBuffer* buffer);
 const TypeKing* GetType(TypeHandle handle);

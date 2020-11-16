@@ -14,58 +14,23 @@
 #include "TreeSitterJai.h"
 #include "FileScope.h"
 
+
+import Hashmap;
+
+
 ConcurrentDictionary<TSTree*> g_trees;
 ConcurrentDictionary<GapBuffer*> g_buffers;
 ConcurrentDictionary<Module*> g_modules;
 ConcurrentDictionary<FileScope*> g_fileScopes;
 std::vector<const FileScope*> g_fileScopeByIndex;
 ConcurrentDictionary<std::string> g_filePaths;
+static std::mutex hope;
 
 TSLanguage* g_jaiLang;
 Constants g_constants;
 
 static char names[1000];
 export long long UpdateTree(uint64_t hashValue);
-
-
-static void SetupBuiltInTypes()
-{
-	g_constants.builtInTypes[StringHash("bool")] =			TypeHandle{ .fileIndex = UINT16_MAX, .index = 0 };
-	g_constants.builtInTypes[StringHash("float32")] =		TypeHandle{ .fileIndex = UINT16_MAX, .index = 1 };
-	g_constants.builtInTypes[StringHash("float")] =	  		TypeHandle{ .fileIndex = UINT16_MAX, .index = 1 };
-	g_constants.builtInTypes[StringHash("float64")] = 		TypeHandle{ .fileIndex = UINT16_MAX, .index = 2 };
-	g_constants.builtInTypes[StringHash("char")] =    		TypeHandle{ .fileIndex = UINT16_MAX, .index = 3 };
-	g_constants.builtInTypes[StringHash("string")] =  		TypeHandle{ .fileIndex = UINT16_MAX, .index = 4 };
-	g_constants.builtInTypes[StringHash("s8")] =      		TypeHandle{ .fileIndex = UINT16_MAX, .index = 5 };
-	g_constants.builtInTypes[StringHash("s16")] =     		TypeHandle{ .fileIndex = UINT16_MAX, .index = 6 };
-	g_constants.builtInTypes[StringHash("s32")] =     		TypeHandle{ .fileIndex = UINT16_MAX, .index = 7 };
-	g_constants.builtInTypes[StringHash("s64")] =     		TypeHandle{ .fileIndex = UINT16_MAX, .index = 8 };
-	g_constants.builtInTypes[StringHash("int")] =	  		TypeHandle{ .fileIndex = UINT16_MAX, .index = 8 };
-	g_constants.builtInTypes[StringHash("u8")] =      		TypeHandle{ .fileIndex = UINT16_MAX, .index = 9 };
-	g_constants.builtInTypes[StringHash("u16")] =     		TypeHandle{ .fileIndex = UINT16_MAX, .index = 10 };
-	g_constants.builtInTypes[StringHash("u32")] =     		TypeHandle{ .fileIndex = UINT16_MAX, .index = 11 };
-	g_constants.builtInTypes[StringHash("u64")] =     		TypeHandle{ .fileIndex = UINT16_MAX, .index = 12 };
-	g_constants.builtInTypes[StringHash("void")] =    		TypeHandle{ .fileIndex = UINT16_MAX, .index = 13 };
-
-	g_constants.builtInTypesByIndex[0] =  TypeKing{ .name = "bool" };
-	g_constants.builtInTypesByIndex[1] = TypeKing{ .name = "float32" };
-	g_constants.builtInTypesByIndex[2] = TypeKing{ .name = "float64" };
-	g_constants.builtInTypesByIndex[3] = TypeKing{ .name = "char" };
-	g_constants.builtInTypesByIndex[4] = TypeKing{ .name = "string" }; // string has some members like data and length.
-	g_constants.builtInTypesByIndex[4].members = new Scope();
-	g_constants.builtInTypesByIndex[4].members->Add(StringHash("data"), ScopeDeclaration());
-	g_constants.builtInTypesByIndex[4].members->Add(StringHash("count"), ScopeDeclaration());
-
-	g_constants.builtInTypesByIndex[5] = TypeKing{ .name = "s8" };
-	g_constants.builtInTypesByIndex[6] = TypeKing{ .name = "s16" };
-	g_constants.builtInTypesByIndex[7] = TypeKing{ .name = "s32" };
-	g_constants.builtInTypesByIndex[8] = TypeKing{ .name = "s64" };
-	g_constants.builtInTypesByIndex[9] = TypeKing{ .name = "u8" };
-	g_constants.builtInTypesByIndex[10] = TypeKing{ .name = "u16" };
-	g_constants.builtInTypesByIndex[11] = TypeKing{ .name = "u32" };
-	g_constants.builtInTypesByIndex[12] = TypeKing{ .name = "u64" };
-	g_constants.builtInTypesByIndex[13] = TypeKing{ .name = "void" };
-}
 
 
 static void SetupBuiltInFunctions()
@@ -99,8 +64,11 @@ export int Init()
 	g_constants.parameter = ts_language_symbol_for_name(g_jaiLang, "parameter", strlen("parameter"), true);
 	g_constants.functionCall = ts_language_symbol_for_name(g_jaiLang, "func_call", strlen("func_call"), true);
 	g_constants.argument = ts_language_symbol_for_name(g_jaiLang, "argument", strlen("argument"), true);
+	g_constants.unionDecl = ts_language_symbol_for_name(g_jaiLang, "union_definition", strlen("union_definition"), true);
+	g_constants.enumDecl = ts_language_symbol_for_name(g_jaiLang, "enum_definition", strlen("enum_definition"), true);
+	g_constants.usingStatement = ts_language_symbol_for_name(g_jaiLang, "using_statement", strlen("using_statement"), true);
 
-	SetupBuiltInTypes();
+	//SetupBuiltInTypes();
 	SetupBuiltInFunctions();
 
 	return 69420;
@@ -132,39 +100,40 @@ static inline const char* ReadGapBuffer(void* payload, uint32_t byteOffset, TSPo
 }
 
 
-
-Scope* GetScopeForNode(const TSNode& node, FileScope* scope)
+bool GetScopeForNode(const TSNode& node, FileScope* scope, ScopeHandle* handle)
 {
 	
 	auto parent = ts_node_parent(node);
-	while (!scope->scopes.contains(parent.id))
+	while (!scope->ContainsScope(parent.id))
 	{
 		if (ts_node_is_null(parent))
 		{
-			return nullptr;
+			return false;
 		}
 
 		parent = ts_node_parent(parent);
 	}
 
-	return &scope->scopes[parent.id];
+	*handle = scope->GetScopeFromNodeID(parent.id);
+	return true;
 }
 
-Scope* GetScopeAndParentForNode(const TSNode& node, FileScope* scope, TSNode* outParentNode)
+bool GetScopeAndParentForNode(const TSNode& node, FileScope* scope, TSNode* outParentNode, ScopeHandle* handle)
 {
 	auto parent = ts_node_parent(node);
-	while (!scope->scopes.contains(parent.id))
+	while (!scope->ContainsScope(parent.id))
 	{
 		if (ts_node_is_null(parent))
 		{
-			return nullptr;
+			return false;
 		}
 
 		parent = ts_node_parent(parent);
 	}
 
 	*outParentNode = parent;
-	return &scope->scopes[parent.id];
+	*handle = scope->GetScopeFromNodeID(parent.id);
+	return true;
 }
 
 
@@ -178,15 +147,15 @@ std::string DebugNode(const TSNode& node, const GapBuffer* gb)
 
 
 
-Scope* GetScopeForNodeDebug(const TSNode& node, FileScope* scope, GapBuffer* gb)
+bool GetScopeForNodeDebug(const TSNode& node, FileScope* scope, GapBuffer* gb, ScopeHandle* handle)
 {
 	auto parent = ts_node_parent(node);
 
-	while (!scope->scopes.contains(parent.id))
+	while (!scope->ContainsScope(parent.id))
 	{
 		if (ts_node_is_null(parent))
 		{
-			return nullptr;
+			return false;
 		}
 
 		auto parentName = GetIdentifierFromBufferCopy(parent, gb);
@@ -196,7 +165,8 @@ Scope* GetScopeForNodeDebug(const TSNode& node, FileScope* scope, GapBuffer* gb)
 		parent = ts_node_parent(parent);
 	}
 
-	return &scope->scopes[parent.id];
+	*handle = scope->GetScopeFromNodeID(parent.id);
+	return true;
 }
 
 
@@ -243,70 +213,11 @@ TokenType GetTokenTypeFromFlags(DeclarationFlags flags)
 		return TokenType::Type;
 	if (flags & DeclarationFlags::Enum)
 		return TokenType::Enum;
+	if (flags & DeclarationFlags::BuiltIn)
+		return TokenType::EnumMember;
 
 	return TokenType::Variable;
 }
-
-
-/*
-static void HandleUnresolvedReferences(std::vector<int>& unresolvedTokenIndex, std::vector<TSNode>& unresolvedEntry, GapBuffer* buffer, FileScope* fileScope)
-{
-	for (int i = 0; i < unresolvedTokenIndex.size(); i++)
-	{
-		// do the slow thing
-		auto index = unresolvedTokenIndex[i];
-		auto node = unresolvedEntry[i];
-		auto identifierHash = GetIdentifierHash(node, buffer);
-		TSNode parent;
-		auto scope = GetScopeAndParentForNode(node, fileScope, &parent);
-
-		// search scopes going up for entries, if they're data scopes. if they're imperative scopes then declarations have to be in order.
-		bool foundInLocalScopes = false;
-
-		while (scope != nullptr)
-		{
-			if (auto decl = scope->TryGet(identifierHash))
-			{
-				// if the scope is imperative, then respect ordering, if it is not, just add the entry.
-				if (scope->imperative)
-				{
-					auto definitionStart = decl.value().startByte;
-					auto identifierStart = ts_node_start_byte(node);
-					if (identifierStart >= definitionStart)
-					{
-						fileScope->tokens[index].type = GetTokenTypeFromFlags(decl.value().flags);
-						foundInLocalScopes = true;
-						break;
-					}
-				}
-				else
-				{
-					fileScope->tokens[index].type = GetTokenTypeFromFlags(decl.value().flags);
-					foundInLocalScopes = true;
-					break;
-				}
-			}
-
-			scope = GetScopeAndParentForNode(parent, fileScope, &parent); // aliasing???
-		}
-
-		if (foundInLocalScopes)
-			continue;
-
-		if (auto decl = fileScope->Search(identifierHash))
-		{
-			fileScope->tokens[index].type = GetTokenTypeFromFlags(decl.value().flags);
-		}
-		else
-		{
-			fileScope->tokens[index].type = (TokenType)-1;
-		}
-	}
-}
-*/
-
-
-
 
 
 export const char* GetSyntaxNice(Hash document)
@@ -333,6 +244,9 @@ export GapBuffer* GetGapBuffer(Hash document)
 	return g_buffers.Read(document).value();
 }
 
+
+static std::vector<TSInputEdit> s_edits;
+
 export long long EditTree(uint64_t hashValue, const char* change, int startLine, int startCol, int endLine, int endCol, int contentLength, int rangeLength)
 {
 	auto timer = Timer("");
@@ -341,8 +255,12 @@ export long long EditTree(uint64_t hashValue, const char* change, int startLine,
 	auto buffer = g_buffers.Read(documentHash).value();
 	auto edit = buffer->Edit(startLine, startCol, endLine, endCol, change, contentLength, rangeLength);
 	auto tree = g_trees.Read(documentHash).value();
+
+	// this is maybe not thread safe, if we have two edits coming in simultaneously to the same tree.
 	ts_tree_edit(tree, &edit);
-	g_trees.Write(documentHash, tree);
+
+	s_edits.push_back(edit);
+	// g_trees.Write(documentHash, tree); // i don't think we need this. the pointer is not getting modified.
 
 	return timer.GetMicroseconds();
 }
@@ -393,7 +311,6 @@ void IncrementalUpdate(TSTree* oldTree, TSTree* newTree)
 	free(ranges);
 }
 
-static std::mutex hope;
 
 
 export long long CreateTree(const char* documentPath, const char* code, int length)
@@ -441,11 +358,11 @@ export long long CreateTree(const char* documentPath, const char* code, int leng
 	else
 	{
 		auto scope = new FileScope();
-		scope->fileIndex = g_fileScopeByIndex.size();
 		scope->documentHash = documentHash;
 
-		hope.lock(); // hope this fixes it!
 		// this is still not super thread safe because there's no lock around the people who are reading this array.
+		hope.lock(); // hope this fixes it!
+		scope->fileIndex = g_fileScopeByIndex.size();
 		g_fileScopeByIndex.push_back(scope);
 		hope.unlock();
 
@@ -467,6 +384,72 @@ export long long CreateTree(const char* documentPath, const char* code, int leng
 	return timer.GetMicroseconds();
 }
 
+
+
+uint64_t GetContext(TSNode node)
+{
+ //	ts_node_end_byte()
+		return 0;
+}
+
+
+
+void CheckSubtrees(TSNode oldRoot, TSNode newRoot)
+{
+
+
+	auto queryText =
+		"(imperative_scope) @imperative.scope"
+		"(data_scope) @data.scope"
+		;
+
+	uint32_t error_offset;
+	TSQueryError error_type;
+
+	auto query = ts_query_new(
+		g_jaiLang,
+		queryText,
+		strlen(queryText),
+		&error_offset,
+		&error_type
+	);
+
+	TSQueryCursor* queryCursor = ts_query_cursor_new();
+	ts_query_cursor_exec(queryCursor, query, oldRoot);
+
+	TSQueryCursor* newQueryCursor = ts_query_cursor_new();
+	ts_query_cursor_exec(newQueryCursor, query, newRoot);
+
+	TSQueryMatch match, newMatch;
+	uint32_t index, newIndex;
+
+	enum class ScopeMarker
+	{
+		imperativeScope,
+		dataScope,
+	};
+
+
+	while (ts_query_cursor_next_capture(queryCursor, &match, &index) && ts_query_cursor_next_capture(newQueryCursor, &newMatch, &newIndex))
+	{
+		ScopeMarker captureType = (ScopeMarker)match.captures[index].index;
+		auto node = match.captures[index].node;
+		auto newNode = newMatch.captures[newIndex].node;
+
+		if (node.id == newNode.id)
+		{
+			// party time!
+			printf("we did it!");
+
+		}
+		else
+		{
+			printf("we didnt it!");
+		}
+
+
+	}
+}
 
 
 // applies edits!
@@ -491,22 +474,32 @@ export long long UpdateTree(uint64_t hashValue)
 		tree,
 		input);
 
-
-	/*
-	// hack to fix incorrect incremental parsing for now!
-	editedTree = ts_parser_parse(
-		parser,
-		editedTree,
-		input);
-	*/
+	uint32_t rangeCount;
+	auto ranges = ts_tree_get_changed_ranges(tree, editedTree, &rangeCount);
+	auto root = ts_tree_root_node(editedTree);
 
 	g_trees.Write(documentHash, editedTree);
 
+
+	auto fileScope = g_fileScopes.Read(documentHash).value();
+
+	if (rangeCount > 0)
+	{
+		auto changedNode = ts_node_named_descendant_for_byte_range(root, ranges[0].start_byte, ranges[0].end_byte);
+		fileScope->RebuildScope(changedNode, s_edits.data(), s_edits.size());
+	}
+	else
+	{
+		auto changedNode = ts_node_named_descendant_for_byte_range(root, s_edits[0].start_byte, s_edits[0].new_end_byte);
+		fileScope->RebuildScope(changedNode, s_edits.data(), s_edits.size());
+	}
+		
+	s_edits.clear();
+
+
+	free(ranges);
 	ts_parser_delete(parser);
 	ts_tree_delete(tree);
-
-	auto fileScope = g_fileScopes.Read(documentHash);
-	fileScope.value()->Build();
 
 	return timer.GetMicroseconds();
 }
@@ -523,3 +516,24 @@ export long long GetTokens(uint64_t hashValue, SemanticToken** outTokens, int* c
 
 	return t.GetMicroseconds();
 }
+
+
+
+/*
+	ok so the meta for incremental re-analysis is as follows:
+	1) create a hash table of id pointer to scope index, use this to look up scopes when doing tokens and other analysis
+		- create this hash table once ! while building the first top level scope, then modify it incrementally. or we could re-create it each time during the token creation phase. then we wouldn't have to look up the ID to delete missing scopes.
+		- when encountering a scope index, mark it in the present bit-map that the scope holder keeps track of.
+		- at the end if any scopes are not accounted for, append it to the free-list and remove the old IDs from the id -> index hash map.
+	2) create an array of byte_offset -> id pointer
+		- use this array to find out which scope got modified when looking up a new scope node.
+		- you have to keep the edit(s) that caused the new node and apply them to the new array when looking up so that it reflects the new offsets in the file.
+		- once you find the old node id, look it up in id -> index hashmap, delete/replace that key with the new id and the recreated scope.
+		- then you probably have to go up the stack of parent scopes and do the same for those because of the way tree sitter has to replace every effected node up to the root.
+
+
+
+
+
+
+*/

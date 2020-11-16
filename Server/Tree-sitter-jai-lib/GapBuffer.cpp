@@ -1,4 +1,5 @@
-#include "GapBuffer.h"
+module GapBuffer;
+
 #include <assert.h>
 #include <iostream>
 

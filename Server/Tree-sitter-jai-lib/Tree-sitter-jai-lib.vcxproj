@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -108,6 +108,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>C:\Users\pyrom\Documents\tree-sitter-jai\src\tree_sitter;C:\Users\pyrom\Documents\GitHub\tree-sitter\lib\include;C:\Users\pyrom\Documents\GitHub\tree-sitter\lib\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpplatest</LanguageStandard>
+      <EnableModules>true</EnableModules>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -171,7 +172,7 @@
     <ClInclude Include="DefinitionFinder.h" />
     <ClInclude Include="FileScope.h" />
     <ClInclude Include="framework.h" />
-    <ClInclude Include="GapBuffer.h" />
+    <ClInclude Include="stb_ds.h" />
     <ClInclude Include="Timer.h" />
     <ClInclude Include="TreeSitterJai.h" />
   </ItemGroup>
@@ -180,6 +181,9 @@
     <ClCompile Include="DefinitionFinder.cpp" />
     <ClCompile Include="FileScope.cpp" />
     <ClCompile Include="GapBuffer.cpp" />
+    <ClCompile Include="Gapbuffer.ixx" />
+    <ClCompile Include="Hashmap.cpp" />
+    <ClCompile Include="Hashmap.ixx" />
     <ClCompile Include="Hoverer.cpp" />
     <ClCompile Include="lib.c">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">MaxSpeed</Optimization>
@@ -188,6 +192,7 @@
       <BasicRuntimeChecks Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Default</BasicRuntimeChecks>
     </ClCompile>
     <ClCompile Include="Modules.cpp" />
+    <ClCompile Include="stb_ds.cpp" />
     <ClCompile Include="Timer.cpp" />
     <ClCompile Include="Tree-sitter-jai-lib.cpp" />
   </ItemGroup>

@@ -101,7 +101,7 @@ namespace jai_lsp
                             var moduleDirectories = Directory.EnumerateDirectories(path);
                             var count = moduleDirectories.Count();
                             int current = 0;
-                            List<Task> tasks = new List<Task>();
+                            List<Task<string>> tasks = new List<Task<string>>();
                             long totalTime = 0;
 
                             foreach (var moduleDirectory in moduleDirectories)
@@ -115,8 +115,15 @@ namespace jai_lsp
 
                                 if(exists)
                                 {
-                                    manager.OnNext(new WorkDoneProgressReport() { Message = moduleFilePath, Percentage = (double)current / count });
-                                    var task = Task.Run(() => TreeSitter.CreateTreeFromPath(moduleFilePath, moduleName));
+                                    var task = Task.Run(
+
+                                            () =>
+                                            {
+                                                TreeSitter.CreateTreeFromPath(moduleFilePath, moduleName);
+                                                return moduleFilePath;
+                                            }
+                                         
+                                         );
                                     tasks.Add(task);
                                     //totalTime += TreeSitter.CreateTreeFromPath(moduleFilePath, moduleName);
                                     //current++;
@@ -124,7 +131,14 @@ namespace jai_lsp
 
                             }
 
-                            await Task.WhenAll(tasks);
+
+                            while(current < tasks.Count)
+                            {
+                                var task = await Task.WhenAny(tasks);
+                                current++;
+                                manager.OnNext(new WorkDoneProgressReport() { Message = task.Result, Percentage = (double)current / count });
+                            }
+
                             logger.LogInformation("Total time for serial module parsing: " + totalTime + " micros");
 
                         }

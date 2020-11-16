@@ -14,11 +14,6 @@ const TypeKing* GetType(TypeHandle handle)
 	if (handle == TypeHandle::Null())
 		return nullptr;
 
-	if (handle.fileIndex == UINT16_MAX && handle.index != UINT16_MAX)
-	{
-		// built in type.
-		return &g_constants.builtInTypesByIndex[handle.index];
-	}
 
 	return &g_fileScopeByIndex[handle.fileIndex]->types[handle.index];
 }
@@ -47,7 +42,16 @@ std::optional<ScopeDeclaration> GetDeclarationForNodeFromScope(TSNode node, File
 			}
 		}
 
-		scope = GetScopeAndParentForNode(parent, fileScope, &parent); // aliasing???
+		ScopeHandle handle;
+		auto found = GetScopeAndParentForNode(parent, fileScope, &parent, &handle); // aliasing???
+		if (found)
+		{
+			scope = fileScope->GetScope(handle);
+		}
+		else
+		{
+			scope = nullptr;
+		}
 	}
 
 	return fileScope->Search(identifierHash);
@@ -57,8 +61,13 @@ std::optional<ScopeDeclaration> GetDeclarationForNodeFromScope(TSNode node, File
 std::optional<ScopeDeclaration> GetDeclarationForTopLevelNode(TSNode node, FileScope* fileScope, const GapBuffer* buffer)
 {
 	TSNode parent;
-	auto scope = GetScopeAndParentForNode(node, fileScope, &parent);
-	return GetDeclarationForNodeFromScope(node, fileScope, buffer, scope, parent);
+	ScopeHandle handle;
+	auto found = GetScopeAndParentForNode(node, fileScope, &parent, &handle);
+
+	if (!found)
+		return std::nullopt;
+
+	return GetDeclarationForNodeFromScope(node, fileScope, buffer, fileScope->GetScope(handle), parent);
 }
 
 
@@ -93,10 +102,12 @@ std::optional<ScopeDeclaration> EvaluateMemberAccess(TSNode node, FileScope* fil
 	auto rhs = ts_node_named_child(node, 1);
 	auto rhsHash = GetIdentifierHash(rhs, buffer);
 	auto typeKing = GetType(lhsType->type);
-	
-	if (typeKing && typeKing->members)
+
+	if (typeKing)
 	{
-		if (auto rhsDecl = typeKing->members->TryGet(rhsHash))
+		auto members = &g_fileScopeByIndex[lhsType->type.fileIndex]->scopeKings[typeKing->members.index];
+
+		if (auto rhsDecl = members->TryGet(rhsHash))
 		{
 			return rhsDecl;
 		}
@@ -134,7 +145,7 @@ std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fi
 	bool inFileScope = false;
 	bool terminalLHS = false;
 
-	while (!fileScope->scopes.contains(parent.id))
+	while (!fileScope->ContainsScope(parent.id))
 	{
 		if (ts_node_is_null(parent))
 		{
@@ -164,8 +175,11 @@ std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fi
 	}
 
 	Scope* scope = nullptr;
-	if(!inFileScope)
-		scope = &fileScope->scopes[parent.id];
+	if (!inFileScope)
+	{
+		auto handle = fileScope->GetScopeFromNodeID(parent.id);
+		scope = fileScope->GetScope(handle);
+	}
 
 	auto decl = GetDeclarationForNodeFromScope(node, fileScope, buffer, scope, parent);
 	if (decl)

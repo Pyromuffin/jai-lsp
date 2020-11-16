@@ -37,7 +37,8 @@ export void FindDefinition(uint64_t hashValue, int row, int col, uint64_t* outFi
 	auto identifierNode = ts_node_named_descendant_for_point_range(root, point, point);
 	auto identifierHash = GetIdentifierHash(identifierNode, buffer);
 	TSNode parent;
-	auto scope = GetScopeAndParentForNode(identifierNode, fileScope, &parent);
+	ScopeHandle scope;
+	auto found = GetScopeAndParentForNode(identifierNode, fileScope, &parent, &scope);
 
 	*outOriginRange = NodeToRange(identifierNode);
 	std::optional<ScopeDeclaration> entry = std::nullopt;
@@ -45,9 +46,9 @@ export void FindDefinition(uint64_t hashValue, int row, int col, uint64_t* outFi
 	// try something real simple
 
 
-	if (scope != nullptr)
+	if (found)
 	{
-		entry = scope->TryGet(identifierHash);
+		entry = fileScope->GetScope(scope)->TryGet(identifierHash);
 	}
 
 	if (entry)
@@ -63,7 +64,7 @@ export void FindDefinition(uint64_t hashValue, int row, int col, uint64_t* outFi
 	else
 	{
 		// search file scope
-		if (auto decl = fileScope->file.TryGet(identifierHash))
+		if (auto decl = fileScope->TryGet(identifierHash))
 		{
 			auto entry = decl.value();
 			*outFileHash = documentName.value;
@@ -79,7 +80,7 @@ export void FindDefinition(uint64_t hashValue, int row, int col, uint64_t* outFi
 		{
 			if (auto loadedScope = g_fileScopes.Read(load))
 			{
-				if (auto decl = loadedScope.value()->file.TryGet(identifierHash))
+				if (auto decl = loadedScope.value()->TryGet(identifierHash))
 				{
 					if (!(decl.value().flags & DeclarationFlags::Exported))
 						continue;
@@ -107,7 +108,7 @@ export void FindDefinition(uint64_t hashValue, int row, int col, uint64_t* outFi
 			auto importHash = fileScope->imports[i];
 			auto moduleScope = g_modules.Read(importHash).value();
 
-			if (auto decl = moduleScope->moduleFile->file.TryGet(identifierHash))
+			if (auto decl = moduleScope->moduleFile->TryGet(identifierHash))
 			{
 				auto entry = decl.value();
 				if (!(entry.flags & DeclarationFlags::Exported))
@@ -132,7 +133,7 @@ export void FindDefinition(uint64_t hashValue, int row, int col, uint64_t* outFi
 			{
 				if (auto loadedScope = g_fileScopes.Read(load))
 				{
-					if (auto decl = loadedScope.value()->file.TryGet(identifierHash))
+					if (auto decl = loadedScope.value()->TryGet(identifierHash))
 					{
 						auto entry = decl.value();
 						if (!(entry.flags & DeclarationFlags::Exported))
