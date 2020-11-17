@@ -15,9 +15,6 @@
 #include "FileScope.h"
 
 
-import Hashmap;
-
-
 ConcurrentDictionary<TSTree*> g_trees;
 ConcurrentDictionary<GapBuffer*> g_buffers;
 ConcurrentDictionary<Module*> g_modules;
@@ -46,27 +43,27 @@ export int Init()
 {
 	g_jaiLang = tree_sitter_jai();
 
-	g_constants.constDecl = ts_language_symbol_for_name(g_jaiLang, "const_initializer", strlen("const_initializer"), true);
-	g_constants.varDecl = ts_language_symbol_for_name(g_jaiLang, "variable_initializer", strlen("variable_initializer"), true);
-	g_constants.import = ts_language_symbol_for_name(g_jaiLang, "import_statement", strlen("import_statement"), true);
-	g_constants.funcDefinition = ts_language_symbol_for_name(g_jaiLang, "function_definition", strlen("function_definition"), true);
-	g_constants.structDecl = ts_language_symbol_for_name(g_jaiLang, "struct_definition", strlen("struct_definition"), true);
-	g_constants.memberAccess = ts_language_symbol_for_name(g_jaiLang, "member_access", strlen("member_access"), true);
-	g_constants.memberAccessNothing = ts_language_symbol_for_name(g_jaiLang, "member_access_nothing", strlen("member_access_nothing"), true);
-	g_constants.load = ts_language_symbol_for_name(g_jaiLang, "load_statement", strlen("load_statement"), true);
-	g_constants.builtInType = ts_language_symbol_for_name(g_jaiLang, "built_in_type", strlen("built_in_type"), true);
-	g_constants.identifier = ts_language_symbol_for_name(g_jaiLang, "identifier", strlen("identifier"), true);
-	g_constants.namedDecl = ts_language_symbol_for_name(g_jaiLang, "named_decl", strlen("named_decl"), true);
-	g_constants.scopeFile = ts_language_symbol_for_name(g_jaiLang, "scope_file", strlen("scope_file"), true);
-	g_constants.scopeExport = ts_language_symbol_for_name(g_jaiLang, "scope_export", strlen("scope_export"), true);
-	g_constants.dataScope = ts_language_symbol_for_name(g_jaiLang, "data_scope", strlen("data_scope"), true);
-	g_constants.imperativeScope = ts_language_symbol_for_name(g_jaiLang, "imperative_scope", strlen("imperative_scope"), true);
-	g_constants.parameter = ts_language_symbol_for_name(g_jaiLang, "parameter", strlen("parameter"), true);
-	g_constants.functionCall = ts_language_symbol_for_name(g_jaiLang, "func_call", strlen("func_call"), true);
-	g_constants.argument = ts_language_symbol_for_name(g_jaiLang, "argument", strlen("argument"), true);
-	g_constants.unionDecl = ts_language_symbol_for_name(g_jaiLang, "union_definition", strlen("union_definition"), true);
-	g_constants.enumDecl = ts_language_symbol_for_name(g_jaiLang, "enum_definition", strlen("enum_definition"), true);
-	g_constants.usingStatement = ts_language_symbol_for_name(g_jaiLang, "using_statement", strlen("using_statement"), true);
+	g_constants.constDecl = ts_language_symbol_for_name(g_jaiLang, "const_initializer", (uint32_t)strlen("const_initializer"), true);
+	g_constants.varDecl = ts_language_symbol_for_name(g_jaiLang, "variable_initializer", (uint32_t)strlen("variable_initializer"), true);
+	g_constants.import = ts_language_symbol_for_name(g_jaiLang, "import_statement", (uint32_t)strlen("import_statement"), true);
+	g_constants.funcDefinition = ts_language_symbol_for_name(g_jaiLang, "function_definition", (uint32_t)strlen("function_definition"), true);
+	g_constants.structDecl = ts_language_symbol_for_name(g_jaiLang, "struct_definition", (uint32_t)strlen("struct_definition"), true);
+	g_constants.memberAccess = ts_language_symbol_for_name(g_jaiLang, "member_access", (uint32_t)strlen("member_access"), true);
+	g_constants.memberAccessNothing = ts_language_symbol_for_name(g_jaiLang, "member_access_nothing", (uint32_t)strlen("member_access_nothing"), true);
+	g_constants.load = ts_language_symbol_for_name(g_jaiLang, "load_statement", (uint32_t)strlen("load_statement"), true);
+	g_constants.builtInType = ts_language_symbol_for_name(g_jaiLang, "built_in_type", (uint32_t)strlen("built_in_type"), true);
+	g_constants.identifier = ts_language_symbol_for_name(g_jaiLang, "identifier", (uint32_t)strlen("identifier"), true);
+	g_constants.namedDecl = ts_language_symbol_for_name(g_jaiLang, "named_decl", (uint32_t)strlen("named_decl"), true);
+	g_constants.scopeFile = ts_language_symbol_for_name(g_jaiLang, "scope_file", (uint32_t)strlen("scope_file"), true);
+	g_constants.scopeExport = ts_language_symbol_for_name(g_jaiLang, "scope_export", (uint32_t)strlen("scope_export"), true);
+	g_constants.dataScope = ts_language_symbol_for_name(g_jaiLang, "data_scope", (uint32_t)strlen("data_scope"), true);
+	g_constants.imperativeScope = ts_language_symbol_for_name(g_jaiLang, "imperative_scope", (uint32_t)strlen("imperative_scope"), true);
+	g_constants.parameter = ts_language_symbol_for_name(g_jaiLang, "parameter", (uint32_t)strlen("parameter"), true);
+	g_constants.functionCall = ts_language_symbol_for_name(g_jaiLang, "func_call", (uint32_t)strlen("func_call"), true);
+	g_constants.argument = ts_language_symbol_for_name(g_jaiLang, "argument", (uint32_t)strlen("argument"), true);
+	g_constants.unionDecl = ts_language_symbol_for_name(g_jaiLang, "union_definition", (uint32_t)strlen("union_definition"), true);
+	g_constants.enumDecl = ts_language_symbol_for_name(g_jaiLang, "enum_definition", (uint32_t)strlen("enum_definition"), true);
+	g_constants.usingStatement = ts_language_symbol_for_name(g_jaiLang, "using_statement", (uint32_t)strlen("using_statement"), true);
 
 	//SetupBuiltInTypes();
 	SetupBuiltInFunctions();
@@ -77,8 +74,8 @@ export int Init()
 static inline const char* ReadGapBuffer(void* payload, uint32_t byteOffset, TSPoint position, uint32_t* bytesRead)
 {
 	GapBuffer* gapBuffer = (GapBuffer*)payload;
-	auto afterSize = gapBuffer->after.size();
-	auto beforeSize = gapBuffer->before.size();
+	auto afterSize = (uint32_t)gapBuffer->after.size();
+	auto beforeSize = (uint32_t)gapBuffer->before.size();
 
 	if (byteOffset >= beforeSize + afterSize)
 	{
@@ -276,7 +273,7 @@ static void HandleLoad(Hash documentHash)
 	t.seekg(0);
 	t.read(&buffer[0], size);
 
-	CreateTree(path.c_str(), buffer.c_str(), buffer.length());
+	CreateTree(path.c_str(), buffer.c_str(), (uint32_t)buffer.length());
 
 	// if this has loads handle them too
 	auto fileScope = g_fileScopes.Read(documentHash).value();
@@ -295,7 +292,7 @@ void IncrementalUpdate(TSTree* oldTree, TSTree* newTree)
 	auto newRoot = ts_tree_root_node(newTree);
 
 	auto ranges = ts_tree_get_changed_ranges(oldTree, newTree, &length);
-	for (int i = 0; i < length; i++)
+	for (uint32_t i = 0; i < length; i++)
 	{
 		auto range = ranges[i];
 		auto oldNode = ts_node_named_descendant_for_byte_range(oldRoot, range.start_byte, range.end_byte);
@@ -362,7 +359,7 @@ export long long CreateTree(const char* documentPath, const char* code, int leng
 
 		// this is still not super thread safe because there's no lock around the people who are reading this array.
 		hope.lock(); // hope this fixes it!
-		scope->fileIndex = g_fileScopeByIndex.size();
+		scope->fileIndex = (uint16_t)g_fileScopeByIndex.size();
 		g_fileScopeByIndex.push_back(scope);
 		hope.unlock();
 
@@ -409,7 +406,7 @@ void CheckSubtrees(TSNode oldRoot, TSNode newRoot)
 	auto query = ts_query_new(
 		g_jaiLang,
 		queryText,
-		strlen(queryText),
+		(uint32_t)strlen(queryText),
 		&error_offset,
 		&error_type
 	);
@@ -486,12 +483,12 @@ export long long UpdateTree(uint64_t hashValue)
 	if (rangeCount > 0)
 	{
 		auto changedNode = ts_node_named_descendant_for_byte_range(root, ranges[0].start_byte, ranges[0].end_byte);
-		fileScope->RebuildScope(changedNode, s_edits.data(), s_edits.size());
+		fileScope->RebuildScope(changedNode, s_edits.data(), (int)s_edits.size(), root);
 	}
 	else
 	{
 		auto changedNode = ts_node_named_descendant_for_byte_range(root, s_edits[0].start_byte, s_edits[0].new_end_byte);
-		fileScope->RebuildScope(changedNode, s_edits.data(), s_edits.size());
+		fileScope->RebuildScope(changedNode, s_edits.data(), (int)s_edits.size(), root);
 	}
 		
 	s_edits.clear();
@@ -512,7 +509,7 @@ export long long GetTokens(uint64_t hashValue, SemanticToken** outTokens, int* c
 	auto documentHash = Hash{ .value = hashValue };
 	auto fileScope = g_fileScopes.Read(documentHash).value();
 	*outTokens = fileScope->tokens.data();
-	*count = fileScope->tokens.size();
+	*count = (int)fileScope->tokens.size();
 
 	return t.GetMicroseconds();
 }

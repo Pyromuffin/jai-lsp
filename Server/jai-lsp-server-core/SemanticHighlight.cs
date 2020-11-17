@@ -1,62 +1,58 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using OmniSharp.Extensions.LanguageServer.Protocol;
+﻿using Microsoft.Extensions.Logging;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
-using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document.Proposals;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models.Proposals;
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 #pragma warning disable 618
 
 namespace jai_lsp
 {
 
-        public enum TokenType : byte
-        {
-            Documentation,
-            Comment,
-            Keyword,
-            String,
-            Number,
-            Regexp,
-            Operator,
-            Namespace,
-            Type,
-            Struct,
-            Class,
-            Interface,
-            Enum,
-            TypeParameter,
-            Function,
-            Member,
-            Property,
-            Macro,
-            Variable,
-            Parameter,
-            Label,
-            EnumMember,
-        }
+    public enum TokenType : byte
+    {
+        Documentation,
+        Comment,
+        Keyword,
+        String,
+        Number,
+        Regexp,
+        Operator,
+        Namespace,
+        Type,
+        Struct,
+        Class,
+        Interface,
+        Enum,
+        TypeParameter,
+        Function,
+        Member,
+        Property,
+        Macro,
+        Variable,
+        Parameter,
+        Label,
+        EnumMember,
+    }
 
-        public enum TokenModifier : byte
-        {
-            Documentation,
-            Declaration,
-            Definition,
-            Static,
-            Abstract,
-            Deprecated,
-            Readonly,
-        }
+    public enum TokenModifier : byte
+    {
+        Documentation,
+        Declaration,
+        Definition,
+        Static,
+        Abstract,
+        Deprecated,
+        Readonly,
+    }
 
 
 #pragma warning disable 618
-        public class SemanticTokensHandler : SemanticTokensHandlerBase
+    public class SemanticTokensHandler : SemanticTokensHandlerBase
     {
 
         static string[] typeNames =

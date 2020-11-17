@@ -1,25 +1,20 @@
-﻿using System;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Server;
 using Serilog;
-using System.IO;
-using System.Reflection;
-using System.Linq;
-using System.Reactive.PlatformServices;
-using System.Reactive;
+using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace jai_lsp
 {
     class Program
     {
 
-     
+
         static void Main(string[] args)
         {
             MainAsync(args).Wait();
@@ -54,14 +49,15 @@ namespace jai_lsp
                     .WithHandler<Hoverer>()
                     .WithHandler<TextDocumentHandler>()
                     .WithHandler<CompletionHandler>()
-                  //  .WithHandler<WorkspaceFolderChangeHandler>()
+                    //  .WithHandler<WorkspaceFolderChangeHandler>()
 
                     // handlers added after here dont work i think!
                     .WithHandler<SemanticTokensHandler>()
 
                     .WithServices(ConfigureServices)
                     .WithServices(x => x.AddLogging(b => b.SetMinimumLevel(LogLevel.Error)))
-                    .WithServices(services => {
+                    .WithServices(services =>
+                    {
                         services.AddSingleton(provider =>
                         {
                             var loggerFactory = provider.GetService<ILoggerFactory>();
@@ -74,9 +70,10 @@ namespace jai_lsp
                         .AddSingleton<HashNamer>()
                         .AddSingleton<Diagnoser>();
                     })
-                     
 
-                    .OnStarted(async (languageServer, token) => {
+
+                    .OnStarted(async (languageServer, token) =>
+                    {
 
                         using var manager = await languageServer.WorkDoneManager.Create(new WorkDoneProgressBegin() { Title = "Parsing Modules", Percentage = 0, Cancellable = true });
 
@@ -87,15 +84,15 @@ namespace jai_lsp
 
                         WorkspaceFolderParams wsf = new WorkspaceFolderParams();
                         var wsfresults = await languageServer.Client.SendRequest(wsf, token);
-            
-                        foreach(var folder in wsfresults)
+
+                        foreach (var folder in wsfresults)
                         {
                             // find all the jai files and hash their paths
                             string[] files = Directory.GetFiles(folder.Uri.GetFileSystemPath(), "*.jai", SearchOption.AllDirectories);
-                            foreach(var f in files)
+                            foreach (var f in files)
                             {
                                 namer.hashToName[Hash.StringHash(f)] = f;
-                            }    
+                            }
 
                             var path = Path.Combine(folder.Uri.GetFileSystemPath(), "modules");
                             var moduleDirectories = Directory.EnumerateDirectories(path);
@@ -113,7 +110,7 @@ namespace jai_lsp
                                 var moduleName = moduleDirectory.Substring(separatorIndex + 1);
                                 var exists = File.Exists(moduleFilePath);
 
-                                if(exists)
+                                if (exists)
                                 {
                                     var task = Task.Run(
 
@@ -122,7 +119,7 @@ namespace jai_lsp
                                                 TreeSitter.CreateTreeFromPath(moduleFilePath, moduleName);
                                                 return moduleFilePath;
                                             }
-                                         
+
                                          );
                                     tasks.Add(task);
                                     //totalTime += TreeSitter.CreateTreeFromPath(moduleFilePath, moduleName);
@@ -132,7 +129,7 @@ namespace jai_lsp
                             }
 
 
-                            while(current < tasks.Count)
+                            while (current < tasks.Count)
                             {
                                 var task = await Task.WhenAny(tasks);
                                 current++;
@@ -144,7 +141,7 @@ namespace jai_lsp
                         }
                         manager.OnCompleted();
                     })
-                    
+
             );
 
             // lmao i have no idea

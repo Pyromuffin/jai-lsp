@@ -2,15 +2,13 @@
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
-using OmniSharp.Extensions.LanguageServer.Protocol.Document.Proposals;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
-using OmniSharp.Extensions.LanguageServer.Protocol.Models.Proposals;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace jai_lsp
 {
-    class Definer: IDefinitionHandler
+    class Definer : IDefinitionHandler
     {
         HashNamer hashNamer;
         ILogger _logger;
@@ -27,10 +25,10 @@ namespace jai_lsp
         {
             _logger = logger;
             this.hashNamer = hashNamer;
-            
+
         }
 
-       
+
 
         OmniSharp.Extensions.LanguageServer.Protocol.Models.Range ConvertRange(Range range)
         {
@@ -112,7 +110,7 @@ namespace jai_lsp
             return Task.FromResult(hover);
         }
 
-   
+
 
         public void SetCapability(HoverCapability capability)
         {

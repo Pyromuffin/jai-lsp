@@ -1,5 +1,4 @@
-﻿using OmniSharp.Extensions.LanguageServer.Protocol;
-using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
+﻿using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
@@ -46,8 +45,8 @@ namespace jai_lsp
 
             var nameList = names.Split(",");
             List<CompletionItem> items = new List<CompletionItem>(nameList.Length);
-            
-            foreach(var name in nameList )
+
+            foreach (var name in nameList)
             {
                 var completion = new CompletionItem();
                 completion.Label = name;

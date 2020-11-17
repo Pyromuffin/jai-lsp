@@ -64,7 +64,7 @@ namespace jai_lsp
 
         [DllImport(dllpath)]
         extern static public void FindDefinition(ulong documentName, int row, int col, out ulong outFileHash, out Range origin, out Range target, out Range selection);
-        
+
         [DllImport(dllpath)]
         extern static public IntPtr GetSyntaxNice(ulong documentHash);
 
@@ -75,7 +75,7 @@ namespace jai_lsp
         extern static public IntPtr GetLine(ulong documentName, int row);
 
         [DllImport(dllpath)]
-        extern static public void GetSignature(ulong hashValue, int row, int col, out IntPtr signature, out int parameterCount, out int activeParameter, out int parameterErrorCount, out IntPtr parameterErrorRanges );
+        extern static public void GetSignature(ulong hashValue, int row, int col, out IntPtr signature, out int parameterCount, out int activeParameter, out int parameterErrorCount, out IntPtr parameterErrorRanges);
 
 
     }

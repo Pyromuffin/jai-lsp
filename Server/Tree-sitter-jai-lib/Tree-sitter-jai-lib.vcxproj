@@ -172,6 +172,8 @@
     <ClInclude Include="DefinitionFinder.h" />
     <ClInclude Include="FileScope.h" />
     <ClInclude Include="framework.h" />
+    <ClInclude Include="GapBuffer.h" />
+    <ClInclude Include="Hashmap.h" />
     <ClInclude Include="stb_ds.h" />
     <ClInclude Include="Timer.h" />
     <ClInclude Include="TreeSitterJai.h" />
@@ -181,9 +183,7 @@
     <ClCompile Include="DefinitionFinder.cpp" />
     <ClCompile Include="FileScope.cpp" />
     <ClCompile Include="GapBuffer.cpp" />
-    <ClCompile Include="Gapbuffer.ixx" />
     <ClCompile Include="Hashmap.cpp" />
-    <ClCompile Include="Hashmap.ixx" />
     <ClCompile Include="Hoverer.cpp" />
     <ClCompile Include="lib.c">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">MaxSpeed</Optimization>

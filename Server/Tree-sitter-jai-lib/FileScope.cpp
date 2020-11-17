@@ -1,10 +1,11 @@
-
 #include "FileScope.h"
 #include <cassert>
 #include <filesystem>
 
+
 std::optional<ScopeDeclaration> FileScope::SearchExports(Hash identifierHash)
 {
+
 	if (auto decl = GetScope(file)->TryGet(identifierHash))
 	{
 		if (decl.value().flags & DeclarationFlags::Exported)
@@ -92,7 +93,7 @@ void FileScope::HandleMemberReference(TSNode rhsNode, ScopeStack& stack, std::ve
 
 	// if we get here then we've got an unresolved identifier, that we will check when we've parsed the entire document.
 	unresolvedEntry.push_back(rhsNode);
-	unresolvedTokenIndex.push_back(tokens.size());
+	unresolvedTokenIndex.push_back((uint32_t)tokens.size());
 	token.type = (TokenType)-1;
 
 	tokens.push_back(token);
@@ -117,7 +118,7 @@ void FileScope::HandleVariableReference(TSNode node, ScopeStack& stack, std::vec
 
 	for (int sp = 0; sp < stack.scopes.size(); sp++)
 	{
-		int index = stack.scopes.size() - sp - 1;
+		int index = (int)stack.scopes.size() - sp - 1;
 		auto frame = stack.scopes[index];
 		if (auto decl = GetScope(frame)->TryGet(hash))
 		{
@@ -135,7 +136,7 @@ void FileScope::HandleVariableReference(TSNode node, ScopeStack& stack, std::vec
 
 	// if we get here then we've got an unresolved identifier, that we will check when we've parsed the entire document.
 	unresolvedEntry.push_back(node);
-	unresolvedTokenIndex.push_back(tokens.size());
+	unresolvedTokenIndex.push_back((uint32_t)tokens.size());
 	token.type = (TokenType)-1;
 
 done:
@@ -161,7 +162,7 @@ static ScopeDeclaration AddEntryToScope(TSNode node, const GapBuffer* buffer, Sc
 
 
 
-void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope, std::vector<std::tuple<Hash, TSNode>>& unresolvedTypes, std::vector<std::pair<TSNode, TypeHandle>>& structs, bool exporting)
+void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope, std::vector<std::tuple<Hash, TSNode>>& unresolvedTypes, std::vector<TSNode>& structs, bool exporting)
 {
 	auto cursor = Cursor();
 	std::vector<TSNode> identifiers;
@@ -242,28 +243,40 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope,
 	}
 	else if (expressionType == g_constants.structDecl || expressionType == g_constants.unionDecl || expressionType == g_constants.enumDecl)
 	{
-		// allocate a new typeking
-		handle = AllocateType();
-		auto king = &types[handle.index];
 
-		flags = flags | DeclarationFlags::Struct;
-		// descend into struct decl to find the scope.
-		cursor.Child();
-		while (cursor.Sibling())
-		{
-			auto scopeNode = cursor.Current();
-			auto symbol = ts_node_symbol(scopeNode);
-			if (symbol == g_constants.dataScope)
+	
+			// allocate a new typeking
+			
+
+			flags = flags | DeclarationFlags::Struct;
+			// descend into struct decl to find the scope.
+			cursor.Child();
+			while (cursor.Sibling())
 			{
-				king->name = GetIdentifierFromBufferCopy(identifiers[0], buffer); //@todo this is probably not ideal, allocating a string for every type name every time.
-				king->members = AllocateScope(scopeNode);
-				GetScope(king->members)->associatedType = handle;
-				structs.push_back(std::make_pair(scopeNode, handle));
+				auto scopeNode = cursor.Current();
+				auto symbol = ts_node_symbol(scopeNode);
+				if (symbol == g_constants.dataScope)
+				{
 
-				cursor.Sibling(); // skip "}"
+					if (auto scopeHandle = GetScopeFromOffset(scopeNode.context[0], edits, editCount))
+					{
+						handle = GetScope(*scopeHandle)->associatedType;
+					}
+					else
+					{
+						handle = AllocateType();
+						auto king = &types[handle.index];
+						king->name = GetIdentifierFromBufferCopy(identifiers[0], buffer); //@todo this is probably not ideal, allocating a string for every type name every time.
+						king->members = AllocateScope(scopeNode);
+						GetScope(king->members)->associatedType = handle;
+						structs.push_back(scopeNode);
+					}
+
+					cursor.Sibling(); // skip "}"
+				}
+
 			}
-
-		}
+		
 	}
 	else
 	{
@@ -282,7 +295,7 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope,
 }
 
 
-void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope, TypeHandle handle, ScopeStack& stack, bool& exporting, bool rebuild)
+void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope, ScopeStack& stack, bool& exporting, bool rebuild)
 {
 	// OK TO MAKE THIS WORK we need to handle the following two cases:
 	/*
@@ -306,10 +319,7 @@ void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope, TypeHandle
 	// then do all the scopes in the scope, breadth first. this is annoying becuase now we have to iterate through the tree 3 times. Or we can keep track of the struct bodies that need scope-creating.
 	// then do the identifier reference colorings in order
 
-	GetScope(scope)->node = scopeNode;
-	auto parent = ts_node_parent(scopeNode);
-
-	std::vector<std::pair<TSNode, TypeHandle>> structs;
+	std::vector<TSNode> structs;
 	std::vector<std::tuple<Hash, TSNode>> unresolvedNodes;
 	unresolvedNodes.clear();
 
@@ -318,7 +328,7 @@ void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope, TypeHandle
 
 	if (ts_node_symbol(scopeNode) == g_constants.funcDefinition)
 	{
-		HandleFunctionDefnitionParameters(scopeNode, scope, handle, unresolvedNodes, cursor);
+		HandleFunctionDefnitionParameters(scopeNode, scope, unresolvedNodes, cursor);
 	}
 
 
@@ -377,29 +387,21 @@ redo:
 		goto redo;
 	}
 
+	stack.scopes.push_back(scope);
 
-	if (!rebuild)
+	// when rebuilding, we only want to find declarations for scopes that don't exist yet!
+	// i think we can find out which scopes don't exist from checking the offsets
+	for (auto structNode : structs)
 	{
-		stack.scopes.push_back(scope);
-
-		// after types have been inferred, we can go into the struct bodies and create their members
-		for (auto pair : structs)
-		{
-			// find declarations in scopes
-
-			// this is actually a happy accident. we don't really want to make the function definition node "own" the scope, but maybe thats ok because it saves us from having find the imperative scope on the function later when we're creating tokens.
-			auto scopeHandle = GetScopeFromNodeID(pair.first.id);
-			FindDeclarations(pair.first, scopeHandle, pair.second, stack, exporting);
-		}
-
-		stack.scopes.pop_back();
+		auto scopeHandle = GetScopeFromNodeID(structNode.id);
+		FindDeclarations(structNode, scopeHandle, stack, exporting);
 	}
 
-
+	stack.scopes.pop_back();
 
 }
 
-void FileScope::HandleFunctionDefnitionParameters(TSNode node, ScopeHandle currentScope, TypeHandle handle, std::vector<std::tuple<Hash, TSNode>>& unresolvedNodes, Cursor& cursor) 
+void FileScope::HandleFunctionDefnitionParameters(TSNode node, ScopeHandle currentScope, std::vector<std::tuple<Hash, TSNode>>& unresolvedNodes, Cursor& cursor) 
 {
 	// by the time we get here, all outside declarations should have been added.
 	// grab parameters, and imperative scope,
@@ -422,7 +424,8 @@ void FileScope::HandleFunctionDefnitionParameters(TSNode node, ScopeHandle curre
 	// now the cursor should be at the function header.
 	// we want to extract the parameters from the function header.
 	auto headerNode = cursor.Current();
-	auto king = &types[handle.index];
+	auto typeHandle = GetScope(currentScope)->associatedType;
+	auto king = &types[typeHandle.index];
 	king->name = GetIdentifierFromBufferCopy(headerNode, buffer);
 
 	cursor.Child(); //inside function header, should be parameter list
@@ -480,12 +483,15 @@ void FileScope::HandleFunctionDefnitionParameters(TSNode node, ScopeHandle curre
 
 
 
-TypeHandle FileScope::HandleFuncDefinitionNode(TSNode node, std::vector<std::pair<TSNode, TypeHandle>>& structs, DeclarationFlags& flags)
+TypeHandle FileScope::HandleFuncDefinitionNode(TSNode node, std::vector<TSNode>& structs, DeclarationFlags& flags)
 {
 	// so all we need to do here is allocate a type, find the scope node, add the type king info members and name. params get injected and resolved when we go to find the members in the scope later.
 
 	flags = flags | DeclarationFlags::Function;
-
+	if (auto scopeHandle = GetScopeFromOffset(node.context[0], edits, editCount))
+	{
+		return GetScope(*scopeHandle)->associatedType;
+	}
 
 	Cursor& cursor = scope_builder_cursor; // please please dont put a function definition in here.
 	cursor.Reset(node);
@@ -499,7 +505,7 @@ TypeHandle FileScope::HandleFuncDefinitionNode(TSNode node, std::vector<std::pai
 	auto scopeHandle = AllocateScope(node);
 	GetScope(scopeHandle)->associatedType = typeHandle;
 	king->members = scopeHandle;
-	structs.push_back(std::make_pair(node, typeHandle)); // not the scope node! this is how we can know we're doing a function definition later.
+	structs.push_back(node); // not the scope node! this is how we can know we're doing a function definition later.
 
 	return typeHandle;
 }
@@ -589,7 +595,7 @@ void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& export
 
 	stack.scopes.push_back(file);
 
-	FindDeclarations(node, file, TypeHandle::Null(), stack, exporting);
+	FindDeclarations(node, file, stack, exporting);
 
 	ts_tree_cursor_delete(&cursor);
 }
@@ -621,7 +627,7 @@ void FileScope::Build()
 	auto query = ts_query_new(
 		g_jaiLang,
 		queryText,
-		strlen(queryText),
+		(uint32_t)strlen(queryText),
 		&error_offset,
 		&error_type
 	);
@@ -658,7 +664,8 @@ void FileScope::Build()
 	Cursor functionBodyFinder;
 	int skipPopCount = 0;
 
-	scopeOffsets.clear();
+	offsetToHandle.Clear();
+	offsetToHandle.Add(2, file);
 
 	while (ts_query_cursor_next_capture(queryCursor, &match, &index))
 	{
@@ -679,18 +686,23 @@ void FileScope::Build()
 			stack.scopes.push_back(scopeHandle);
 
 			// also build up the list of scope contexts
-			scopeOffsets.push_back(ts_node_start_byte(node));
-			scopeOffsetHandles.push_back(scopeHandle);
+			offsetToHandle.Add(ts_node_start_byte(node), scopeHandle);
 			break;
 		}
 		case ScopeMarker::func_defn:
 		{
 			skipNextImperative = true;
+			
+			if (!ContainsScope(node.id)) // likely some error state
+			{
+				skipPopCount++;
+				break;
+			}
+
 			auto scopeHandle = GetScopeFromNodeID(node.id);
 			stack.scopes.push_back(scopeHandle);
 
-			scopeOffsets.push_back(ts_node_start_byte(node));
-			scopeOffsetHandles.push_back(scopeHandle);
+			offsetToHandle.Add(ts_node_start_byte(node), scopeHandle);
 			break;
 		}
 		case ScopeMarker::imperativeScope:
@@ -705,13 +717,13 @@ void FileScope::Build()
 			{
 				// naked scope
 				auto scopeHandle = AllocateScope(node);
-				FindDeclarations(node, scopeHandle, TypeHandle::Null(), stack, exporting);
+				FindDeclarations(node, scopeHandle, stack, exporting);
 			}
 	
 			auto scopeHandle = GetScopeFromNodeID(node.id);
 			stack.scopes.push_back(scopeHandle);
-			scopeOffsets.push_back(ts_node_start_byte(node));
-			scopeOffsetHandles.push_back(scopeHandle);
+
+			offsetToHandle.Add(ts_node_start_byte(node), scopeHandle);
 			break;
 		}
 		case ScopeMarker::member_rhs:
@@ -762,7 +774,162 @@ void FileScope::Build()
 	ts_query_cursor_delete(queryCursor);
 }
 
+void FileScope::DoTokens(TSNode root, TSInputEdit* edits, int editCount)
+{
+	auto queryText =
+		"(function_definition) @func_defn" // hopefully this matches before the identifiers does.
+		"(imperative_scope) @imperative.scope"
+		"(data_scope) @data.scope"
+		"(member_access . (_) (_) @member_rhs )"
+		"(identifier) @var_ref"
+		"(block_end) @block_end"
+		"(export_scope_directive) @export"
+		"(file_scope_directive) @file"
+		;
 
+	uint32_t error_offset;
+	TSQueryError error_type;
+
+	auto query = ts_query_new(
+		g_jaiLang,
+		queryText,
+		(uint32_t)strlen(queryText),
+		&error_offset,
+		&error_type
+	);
+
+	TSQueryCursor* queryCursor = ts_query_cursor_new();
+	ts_query_cursor_exec(queryCursor, query, root);
+
+	TSQueryMatch match;
+	uint32_t index;
+
+	enum class ScopeMarker
+	{
+		func_defn,
+		imperativeScope,
+		dataScope,
+		member_rhs,
+		var_ref,
+		block_end,
+		export_scope,
+		file_scope,
+	};
+
+	ScopeStack stack;
+	stack.scopes.push_back(file);
+	std::vector<TSNode> unresolvedEntry;
+	std::vector<int> unresolvedTokenIndex;
+
+	bool exporting = true;
+	bool skipNextImperative = false;
+	int identifiersToSkip = 0;
+	int skipPopCount = 0;
+
+	Hashmap newOffsets;
+	newOffsets.Add(2, file); // why is this 2? i don't know.
+	tokens.clear();
+
+	while (ts_query_cursor_next_capture(queryCursor, &match, &index))
+	{
+		ScopeMarker captureType = (ScopeMarker)match.captures[index].index;
+		auto node = match.captures[index].node;
+		switch (captureType)
+		{
+		
+		
+		case ScopeMarker::func_defn:
+			skipNextImperative = true;
+			[[fallthrough]];
+		case ScopeMarker::dataScope:
+		{
+			auto scopeHandle = GetScopeFromOffset(node.context[0], edits, editCount);
+			scopeHandle = scopeHandle ? scopeHandle : TryGetScopeFromNodeID(node.id);
+
+			if(!scopeHandle)
+			{
+				skipPopCount++;
+				break;
+			}
+
+			stack.scopes.push_back(*scopeHandle);
+			newOffsets.Add(node.context[0], *scopeHandle);
+			SetScopePresentBit(*scopeHandle);
+			
+			break;
+		}
+		case ScopeMarker::imperativeScope:
+		{
+			if (skipNextImperative)
+			{
+				skipNextImperative = false;
+				break;
+			}
+
+			auto scopeHandle = GetScopeFromOffset(node.context[0], edits, editCount);
+
+			if (!scopeHandle)
+			{
+				// naked scope
+				scopeHandle = AllocateScope(node);
+				FindDeclarations(node, *scopeHandle, stack, exporting);
+			}
+
+			stack.scopes.push_back(*scopeHandle);
+			newOffsets.Add(node.context[0], *scopeHandle);
+			SetScopePresentBit(*scopeHandle);
+			break;
+		}
+		case ScopeMarker::member_rhs:
+		{
+			HandleMemberReference(node, stack, unresolvedEntry, unresolvedTokenIndex);
+			identifiersToSkip++;
+			break;
+		}
+		case ScopeMarker::var_ref:
+		{
+			if (identifiersToSkip > 0)
+			{
+				identifiersToSkip--;
+				break;
+			}
+
+			HandleVariableReference(node, stack, unresolvedEntry, unresolvedTokenIndex);
+			break;
+		}
+		case ScopeMarker::block_end:
+		{
+			if (skipPopCount > 0)
+			{
+				skipPopCount--;
+				break;
+			}
+
+			stack.scopes.pop_back();
+			break;
+		}
+		case ScopeMarker::export_scope:
+		{
+			exporting = true;
+			break;
+		}
+		case ScopeMarker::file_scope:
+		{
+			exporting = false;
+			break;
+		}
+
+		default:
+			break;
+		}
+	}
+
+
+	offsetToHandle.Clear();
+	offsetToHandle = newOffsets;
+
+	ts_query_delete(query);
+}
 
 const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode node, const GapBuffer* buffer, ScopeHandle current, ScopeStack& stack)
 {
@@ -787,7 +954,7 @@ const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode nod
 
 		for (int sp = 0; sp < stack.scopes.size(); sp++)
 		{
-			int index = stack.scopes.size() - sp - 1;
+			int index = (int)stack.scopes.size() - sp - 1;
 			auto frame = stack.scopes[index];
 			if (auto decl = GetScope(frame)->TryGet(hash))
 			{
@@ -807,8 +974,12 @@ const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode nod
 	return std::nullopt;
 }
 
-void FileScope::RebuildScope(TSNode newScopeNode, TSInputEdit* edits, int editCount)
+
+void FileScope::RebuildScope(TSNode newScopeNode, TSInputEdit* edits, int editCount, TSNode root)
 {
+	this->edits = edits;
+	this->editCount = editCount;
+
 	// first first find the scope node we are within
 	while (!ts_node_is_null(newScopeNode))
 	{
@@ -833,62 +1004,53 @@ void FileScope::RebuildScope(TSNode newScopeNode, TSInputEdit* edits, int editCo
 		newScopeNode = ts_node_parent(newScopeNode);
 	}
 
+	if (ts_node_is_null(newScopeNode))
+	{
+		// this is likely the file scope then.
+		newScopeNode = root;
+	}
 
+	int startByte = ts_node_start_byte(newScopeNode);
+
+	// fix up scope hashtable
+	//FixUpHashmapOffsets(offsetToHandle, edits, editCount);
+
+	auto uneditedStart = startByte;
+	for (int i = 0; i < editCount; i++)
+	{
+		uneditedStart = UnEditStartByte(uneditedStart, edits[i].start_byte, edits[i].new_end_byte, edits[i].old_end_byte);
+	}
+
+	if (uneditedStart == 0)
+	{
+		// then this is the file scope, probably.
+	}
 
 	// first find which node the newScopeNode corresponds to by correlating it with the old node by start-byte
-	int startByte = ts_node_start_byte(newScopeNode);
-	auto scopeIndex = SearchScopeOffsets(startByte, edits[0]);
+	auto scopeIndex = offsetToHandle.GetIndex(uneditedStart);
 
 	if (scopeIndex != -1)
 	{
-		auto handle = scopeOffsetHandles[scopeIndex];
+		auto handle = offsetToHandle[scopeIndex];
 
 		// yay now rebuild the scope somehow!
 
 		// first generate the scope stack
 		ScopeStack stack;
 
-
-		auto node = GetScope(handle)->node;
-		auto oldNode = node;
-		std::vector<const void*> oldNodes;
-		std::vector<TSNode> newNodes;
 		TSNode newNode = newScopeNode;
-
-		//ts_node_edit(&node, &edits[0]);
-		auto root = ts_tree_root_node(node.tree);
-		auto newRoot = ts_tree_root_node(newNode.tree);
-
-		auto nodeString = DebugNode(node, buffer);
-		auto newNodeString = DebugNode(newNode, buffer);
-		auto nodeRootString = DebugNode(root, buffer);
-		auto newNodeRootString = DebugNode(newRoot, buffer);
-
-		auto nodeSyntax = ts_node_string(node);
-		auto newNodeSyntax = ts_node_string(newNode);
-		auto rootSyntax = ts_node_string(root);
-		auto newRootSyntax = ts_node_string(newRoot);
-
-		node = ts_node_parent(node);
 		newNode = ts_node_parent(newNode);
 
-		auto nodeString2 = DebugNode(node, buffer);
-		auto newNodeString2 = DebugNode(newNode, buffer);
-		auto nodeSyntax2 = ts_node_string(node);
-		auto newNodeSyntax2 = ts_node_string(newNode);
-
-		while (!ts_node_is_null(node))
+		while (!ts_node_is_null(newNode))
 		{
-			if (ContainsScope(node.id))
+			auto index = offsetToHandle.GetIndex(ts_node_start_byte(newNode));
+			if (index != -1)
 			{
-				auto handle = GetScopeFromNodeID(node.id);
+				auto handle = offsetToHandle[index];
 				stack.scopes.push_back(handle);
-				oldNodes.push_back(node.id);
-				newNodes.push_back(newNode);
 			}
 
 			newNode = ts_node_parent(newNode);
-			node = ts_node_parent(node);
 		}
 
 		std::reverse(stack.scopes.begin(), stack.scopes.end());
@@ -896,23 +1058,32 @@ void FileScope::RebuildScope(TSNode newScopeNode, TSInputEdit* edits, int editCo
 		GetScope(handle)->Clear();
 		bool exporting;
 
-		FindDeclarations(newScopeNode, handle, GetScope(handle)->associatedType, stack, exporting, true);
-
-		// now edit the nodes in the hash map going up.
-		_nodeToScopes.erase(oldNode.id);
-		_nodeToScopes.insert(std::make_pair(newScopeNode.id, handle));
+		_nodeToScopes.clear();
+		FindDeclarations(newScopeNode, handle, stack, exporting, true);
 		
-		for (int i = 0; i < oldNodes.size(); i ++)
-		{
-			auto reversedIndex = oldNodes.size() - i - 1;
-			auto newHandle = stack.scopes[reversedIndex];
-			_nodeToScopes.erase(oldNodes[i]);
-			_nodeToScopes.insert(std::make_pair(newNodes[i].id, newHandle));
-			GetScope(newHandle)->node = newNodes[i];
-		}
-
+		ClearScopePresentBits();
+		DoTokens(root, edits, editCount);
 
 		// now iterate through the bitmaps and free old scopes.
+		auto& current = scopePresentBitmap[whichBitmap];
+		auto& previous = scopePresentBitmap[(whichBitmap + 1) % 2];
+
+		for (int i = 0; i < scopePresentBitmap[0].size(); i++)
+		{
+			auto bits = ~previous[i] & current[i];
+
+			while (bits > 0)
+			{
+				unsigned long firstHigh;
+				_BitScanReverse64(&firstHigh, bits);
+
+				// free scope.
+				auto scopeIndex = (i * 64) + firstHigh;
+				scopeKingFreeList.push_back({ (uint16_t)scopeIndex });
+				bits &= ~(1 << firstHigh); // clear bit for current scope
+			}
+		}
+
 
 	}
 }

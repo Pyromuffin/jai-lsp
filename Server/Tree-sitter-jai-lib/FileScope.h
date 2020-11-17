@@ -1,9 +1,7 @@
 #pragma once
 #include "TreeSitterJai.h"
+#include "Hashmap.h"
 #include <assert.h>
-//#include "stb_ds.h"
-
-
 
 
 struct ScopeStack
@@ -22,8 +20,7 @@ struct FileScope
 	std::vector<Hash> loads;
 	std::vector<TypeKing> types;
 	
-	std::vector<uint32_t> scopeOffsets;
-	std::vector<ScopeHandle> scopeOffsetHandles;
+	Hashmap offsetToHandle;
 
 	std::vector<Scope> scopeKings;
 	std::vector<ScopeHandle> scopeKingFreeList;
@@ -39,6 +36,9 @@ struct FileScope
 
 	Cursor scope_builder_cursor;
 
+	TSInputEdit* edits;
+	int editCount;
+
 	void Clear()
 	{
 		imports.clear();
@@ -46,12 +46,11 @@ struct FileScope
 		types.clear();
 		_nodeToScopes.clear();
 		tokens.clear();
-		scopeOffsets.clear();
-		scopeOffsetHandles.clear();
 		scopeKings.clear();
 		scopeKingFreeList.clear();
 		scopePresentBitmap[0].clear();
 		scopePresentBitmap[1].clear();
+		offsetToHandle.Clear();
 	}
 
 
@@ -91,11 +90,108 @@ struct FileScope
 		return _nodeToScopes.contains(id);
 	}
 
+	static int EditStartByte(int start_byte, int edit_start_byte, int new_end_byte, int old_end_byte)
+	{
+		if (start_byte >= old_end_byte) {
+			start_byte = new_end_byte + (start_byte - old_end_byte);
+		}
+		else if (start_byte > edit_start_byte) { // between old end byte and edit start byte
+			start_byte = -1;
+		}
+
+		return start_byte;
+	}
+
+	static int UnEditStartByte(int start_byte, int edit_start_byte, int new_end_byte, int old_end_byte)
+	{
+		return EditStartByte(start_byte, edit_start_byte, old_end_byte, new_end_byte);
+	}
+
+	static int UnEditStartByte(int start_byte, TSInputEdit* edits, int editCount)
+	{
+		auto edited = start_byte;
+		for (int i = 0; i < editCount; i++)
+		{
+			edited = EditStartByte(start_byte, edits[i].start_byte, edits[i].old_end_byte, edits[i].new_end_byte);
+		}
+
+		return edited;
+	}
+
+
+	static void FixUpHashmapOffsets(Hashmap& hm, TSInputEdit* edits, int editCount)
+	{
+		auto kvps = hm.Data();
+		auto entryCount = hm.Size();
+		auto edit = edits[0];
+		int deletedCount = 0;
+		for (int i = 0; i < entryCount - deletedCount; i++)
+		{
+			auto kvp = kvps[i];
+			auto editedOffset = kvp.key;
+			for (int i = 0; i < editCount; i++)
+			{
+				editedOffset = EditStartByte(editedOffset, edits[i].start_byte, edits[i].new_end_byte, edits[i].old_end_byte);
+			}
+
+			// we need to detect deletions and remove them if we go down this route.
+
+			if (kvp.key != editedOffset)
+			{
+				auto unedited = UnEditStartByte(editedOffset, edits[0].start_byte, edits[0].new_end_byte, edits[0].old_end_byte);
+
+				hm.Remove(kvp.key);
+				hm.Add(editedOffset, kvp.value);
+				i--;
+				deletedCount++;
+			}
+		}
+	}
+
+
+	bool ContainsScope(int offset, TSInputEdit* edits, int editCount)
+	{
+		for (int i = 0; i < editCount; i++)
+		{
+			offset = UnEditStartByte(offset, edits[i].start_byte, edits[i].new_end_byte, edits[i].old_end_byte);
+		}
+		return offsetToHandle.Contains(offset);
+	}
+
+	std::optional<ScopeHandle> GetScopeFromOffset(int offset, TSInputEdit* edits, int editCount)
+	{
+		for (int i = 0; i < editCount; i++)
+		{
+			offset = UnEditStartByte(offset, edits[i].start_byte, edits[i].new_end_byte, edits[i].old_end_byte);
+		}
+
+		int index = offsetToHandle.GetIndex(offset);
+
+		if (index >= 0)
+		{
+			return offsetToHandle[index];
+		}
+
+		return std::nullopt;
+	}
+
+
 	ScopeHandle GetScopeFromNodeID(const void* id)
 	{
 		assert(ContainsScope(id));
 		return _nodeToScopes[id];
 	}
+
+
+	std::optional<ScopeHandle> TryGetScopeFromNodeID(const void* id)
+	{
+		auto it = _nodeToScopes.find(id);
+		if (it == _nodeToScopes.end())
+			return std::nullopt;
+
+		return it->second;
+	}
+
 
 
 	ScopeHandle AllocateScope(TSNode node)
@@ -104,6 +200,9 @@ struct FileScope
 		{
 			auto back = scopeKingFreeList.back();
 			scopeKingFreeList.pop_back();
+			_nodeToScopes[node.id] = back;
+			GetScope(back)->Clear();
+
 			return back;
 		}
 
@@ -146,28 +245,19 @@ struct FileScope
 
 	void HandleMemberReference(TSNode rhsNode, ScopeStack& stack, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex);
 	void HandleVariableReference(TSNode node, ScopeStack& stack, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex);
-	void HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope, std::vector<std::tuple<Hash, TSNode>>& unresolvedTypes, std::vector<std::pair<TSNode, TypeHandle>>& structs, bool exporting);
-	void FindDeclarations(TSNode scopeNode, ScopeHandle scope, TypeHandle handle, ScopeStack& stack, bool& exporting, bool rebuild = false);
-	void HandleFunctionDefnitionParameters(TSNode node, ScopeHandle currentScope, TypeHandle handle, std::vector<std::tuple<Hash, TSNode>>& unresolvedNodes, Cursor& cursor);
-	TypeHandle HandleFuncDefinitionNode(TSNode node, std::vector<std::pair<TSNode, TypeHandle>>& structs, DeclarationFlags& flags);
+	void HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope, std::vector<std::tuple<Hash, TSNode>>& unresolvedTypes, std::vector<TSNode>& structs, bool exporting);
+	void FindDeclarations(TSNode scopeNode, ScopeHandle scope, ScopeStack& stack, bool& exporting, bool rebuild = false);
+	void HandleFunctionDefnitionParameters(TSNode node, ScopeHandle currentScope, std::vector<std::tuple<Hash, TSNode>>& unresolvedNodes, Cursor& cursor);
+	TypeHandle HandleFuncDefinitionNode(TSNode node, std::vector<TSNode>& structs, DeclarationFlags& flags);
 	void CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& exporting);
 	void Build();
-
+	void DoTokens(TSNode root, TSInputEdit* edits, int editCount);
 	const std::optional<TypeHandle> EvaluateNodeExpressionType(TSNode node, const GapBuffer* buffer, ScopeHandle current, ScopeStack& stack);
-
-	static int EditStartByte(int start_byte, int new_start_byte, int new_end_byte, int old_end_byte )
-	{
-		if (start_byte >= old_end_byte) {
-			start_byte = new_end_byte + (start_byte - old_end_byte);
-		}
-		else if (start_byte > new_start_byte) {
-			start_byte = new_end_byte;
-		}
-
-		return start_byte;
-	}
+	void RebuildScope(TSNode newScopeNode, TSInputEdit* edits, int editCount, TSNode root);
 
 
+
+	/*
 	int SearchScopeOffsets(int offset, const TSInputEdit& edit)
 	{
 
@@ -189,9 +279,8 @@ struct FileScope
 			return index;
 		}
 	}
+	*/
 
-
-	void RebuildScope(TSNode newScopeNode, TSInputEdit* edits, int editCount);
 
 
 };

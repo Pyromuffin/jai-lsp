@@ -1,14 +1,8 @@
-﻿using OmniSharp.Extensions.LanguageServer.Protocol.Models;
-using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
-using OmniSharp.Extensions.LanguageServer.Protocol.Document;
+﻿using OmniSharp.Extensions.LanguageServer.Protocol.Document;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Collections.Generic;
-using MediatR.Pipeline;
-using System.Linq;
-using System;
-using OmniSharp.Extensions.LanguageServer.Protocol;
-using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;
 
 namespace jai_lsp
 {
@@ -73,7 +67,7 @@ namespace jai_lsp
             help.ActiveParameter = activeParameter;
             help.ActiveSignature = 0;
 
-   
+
             if (errorCount > 0)
             {
                 List<Diagnostic> diagnostics = new List<Diagnostic>();
@@ -88,7 +82,7 @@ namespace jai_lsp
                         Diagnostic diagnostic = new Diagnostic();
                         diagnostic.Message = "Extra argument";
                         diagnostic.Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(
-                            new Position(error.startLine, error.startCol), 
+                            new Position(error.startLine, error.startCol),
                             new Position(error.endLine, error.endCol));
                         diagnostics.Add(diagnostic);
                     }
@@ -98,7 +92,7 @@ namespace jai_lsp
             }
             else
             {
-                diagnoser.Add(request.TextDocument.Uri, 1, new List<Diagnostic>() );
+                diagnoser.Add(request.TextDocument.Uri, 1, new List<Diagnostic>());
             }
 
             return Task.FromResult(help);

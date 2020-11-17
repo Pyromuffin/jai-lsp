@@ -1,4 +1,4 @@
-module GapBuffer;
+#include "GapBuffer.h"
 
 #include <assert.h>
 #include <iostream>
@@ -180,7 +180,7 @@ void GapBuffer::GetRowCopy(int row, std::string& s)
     int index = 0;
     while ( (lineStart + index) < (before.size() + after.size()) )
     {
-        auto character = GetChar(lineStart + index);
+        auto character = GetChar((int)lineStart + index);
         if ( character == '\n')
             break;
 

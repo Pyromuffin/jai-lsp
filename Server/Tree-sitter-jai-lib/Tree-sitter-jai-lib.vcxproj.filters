@@ -33,6 +33,12 @@
     <ClInclude Include="stb_ds.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="GapBuffer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Hashmap.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Tree-sitter-jai-lib.cpp">
@@ -66,12 +72,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Hashmap.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Hashmap.ixx">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Gapbuffer.ixx">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

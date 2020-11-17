@@ -149,22 +149,19 @@ private:
 	int size;
 
 public:
-	TSNode node;
 	TypeHandle associatedType = TypeHandle::Null();
 	bool imperative;
 
 	void Clear()
 	{
 		size = 0;
-		node = { 0 };
-		//associatedType = TypeHandle::Null();
 		declarations.clear();
 	}
 
 	std::optional<ScopeDeclaration> TryGet(const Hash hash) const
 	{
 #if SMALL
-		if (size < small_size)
+		if (size <= small_size)
 		{
 			for (int i = 0; i < size; i++)
 			{
@@ -213,7 +210,7 @@ public:
 	void AppendMembers(std::string& str, const GapBuffer* buffer, uint32_t upTo = UINT_MAX) const
 	{
 #if SMALL
-		if (size < small_size)
+		if (size <= small_size)
 		{
 			for (int i = 0; i < size; i++)
 			{
@@ -249,7 +246,7 @@ public:
 	void AppendExportedMembers(std::string& str, const GapBuffer* buffer)
 	{
 #if SMALL
-		if (size < small_size)
+		if (size <= small_size)
 		{
 			for (int i = 0; i < size; i++)
 			{
@@ -282,7 +279,7 @@ public:
 	void UpdateType(const Hash hash, const TypeHandle type)
 	{
 #if SMALL
-		if (size < small_size)
+		if (size <= small_size)
 		{
 			for (int i = 0; i < size; i++)
 			{
