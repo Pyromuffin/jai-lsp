@@ -295,6 +295,26 @@ public:
 		declarations[hash].type = type;
 	}
 
+	void InjectMembersTo(Scope* otherScope)
+	{
+#if SMALL
+		if (size <= small_size)
+		{
+			for (int i = 0; i < size; i++)
+			{
+				auto decl = small_declarations[i];
+				auto hash = small_hashes[i];
+				otherScope->Add(hash, decl);
+			}
+
+			return;
+		}
+#endif
+		for (auto& kvp : declarations)
+		{
+			otherScope->Add(kvp.first, kvp.second);
+		}
+	}
 	
 };
 

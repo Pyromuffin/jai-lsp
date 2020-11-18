@@ -20,6 +20,7 @@ size_t Hashmap::GetIndex(int key)
 
 ScopeHandle Hashmap::Get(int key)
 {
+	assert(Contains(key));
 	return hmget(map, key);
 }
 

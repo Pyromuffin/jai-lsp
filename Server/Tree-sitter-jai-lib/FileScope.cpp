@@ -243,40 +243,33 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope,
 	}
 	else if (expressionType == g_constants.structDecl || expressionType == g_constants.unionDecl || expressionType == g_constants.enumDecl)
 	{
-
-	
-			// allocate a new typeking
-			
-
-			flags = flags | DeclarationFlags::Struct;
-			// descend into struct decl to find the scope.
-			cursor.Child();
-			while (cursor.Sibling())
+		flags = flags | DeclarationFlags::Struct;
+		// descend into struct decl to find the scope.
+		cursor.Child();
+		while (cursor.Sibling())
+		{
+			auto scopeNode = cursor.Current();
+			auto symbol = ts_node_symbol(scopeNode);
+			if (symbol == g_constants.dataScope)
 			{
-				auto scopeNode = cursor.Current();
-				auto symbol = ts_node_symbol(scopeNode);
-				if (symbol == g_constants.dataScope)
+
+				if (auto scopeHandle = GetScopeFromOffset(scopeNode.context[0], edits, editCount))
 				{
-
-					if (auto scopeHandle = GetScopeFromOffset(scopeNode.context[0], edits, editCount))
-					{
-						handle = GetScope(*scopeHandle)->associatedType;
-					}
-					else
-					{
-						handle = AllocateType();
-						auto king = &types[handle.index];
-						king->name = GetIdentifierFromBufferCopy(identifiers[0], buffer); //@todo this is probably not ideal, allocating a string for every type name every time.
-						king->members = AllocateScope(scopeNode);
-						GetScope(king->members)->associatedType = handle;
-						structs.push_back(scopeNode);
-					}
-
-					cursor.Sibling(); // skip "}"
+					handle = GetScope(*scopeHandle)->associatedType;
+				}
+				else
+				{
+					handle = AllocateType();
+					auto king = &types[handle.index];
+					king->name = GetIdentifierFromBufferCopy(identifiers[0], buffer); //@todo this is probably not ideal, allocating a string for every type name every time.
+					king->members = AllocateScope(scopeNode);
+					GetScope(king->members)->associatedType = handle;
+					structs.push_back(scopeNode);
 				}
 
+				cursor.Sibling(); // skip "}"
 			}
-		
+		}
 	}
 	else
 	{
@@ -294,6 +287,21 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope,
 
 }
 
+void FileScope::HandleUsingStatement(TSNode node, ScopeHandle scope, std::vector<std::tuple<Hash, TSNode>>& unresolvedTypes, std::vector<TSNode>& structs, bool& exporting)
+{
+	auto child = ts_node_named_child(node, 0);
+	if (ts_node_symbol(child) == g_constants.namedDecl)
+	{
+		HandleNamedDecl(child, scope, unresolvedTypes, structs, exporting);
+	}
+	else
+	{
+		unresolvedTypes.push_back(std::make_tuple(Hash{ 0 }, node));
+	}
+
+
+
+}
 
 void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope, ScopeStack& stack, bool& exporting, bool rebuild)
 {
@@ -343,11 +351,16 @@ void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope, ScopeStack
 			HandleNamedDecl(node, scope, unresolvedNodes, structs, exporting);
 		}
 
-		if (type == g_constants.usingStatement)
+		else if (type == g_constants.usingStatement)
 		{
-			node = ts_node_child(node, 0);
-			if(ts_node_symbol(node) == g_constants.namedDecl)
-				HandleNamedDecl(node, scope, unresolvedNodes, structs, exporting);
+			HandleUsingStatement(node, scope, unresolvedNodes, structs, exporting);
+		}
+
+		else if (type == g_constants.imperativeScope)
+		{
+			// naked scope
+			AllocateScope(node);
+			structs.push_back(node);
 		}
 
 		else if (type == g_constants.scopeExport)
@@ -366,11 +379,28 @@ redo:
 	for (int i = 0; i < unresolvedNodes.size(); i++)
 	{
 		auto& unresolved = unresolvedNodes[i];
-		auto exprType = EvaluateNodeExpressionType(std::get<1>(unresolved), buffer, scope, stack);
-		if (exprType && exprType.value() != TypeHandle::Null())
+		auto node = std::get<1>(unresolved);
+		auto hash = std::get<0>(unresolved);
+		auto symbol = ts_node_symbol(node);
+		bool usingStatement = hash.value == 0;
+		if (usingStatement)
 		{
-			auto handle = exprType.value();
-			GetScope(scope)->UpdateType(std::get<0>(unresolved), handle);
+			node = ts_node_named_child(node, 0);
+		}
+
+		auto exprType = EvaluateNodeExpressionType(node, buffer, scope, stack);
+		if (exprType && *exprType != TypeHandle::Null())
+		{
+
+			if (usingStatement)
+			{
+				// defer these until we've solved everything else becuase we need fully populated scopes.
+				usings.push_back(std::make_pair(scope, *exprType));
+			}
+			else
+			{
+				GetScope(scope)->UpdateType(hash, *exprType);
+			}
 
 			// erase swap back.
 			unresolved = unresolvedNodes.back();
@@ -386,6 +416,8 @@ redo:
 		resolvedAtLeastOne = false;
 		goto redo;
 	}
+
+
 
 	stack.scopes.push_back(scope);
 
@@ -659,6 +691,14 @@ void FileScope::Build()
 
 	CreateTopLevelScope(root, stack, exporting);
 
+	for (auto& use : usings)
+	{
+		auto type = GetType(use.second);
+		auto memberScope = GetScope(type->members);
+		memberScope->InjectMembersTo(GetScope(use.first));
+	}
+	usings.clear();
+
 	int identifiersToSkip = 0;
 
 	Cursor functionBodyFinder;
@@ -715,9 +755,16 @@ void FileScope::Build()
 
 			if (!ContainsScope(node.id))
 			{
-				// naked scope
+				// scope in an if statement or something probably.
 				auto scopeHandle = AllocateScope(node);
 				FindDeclarations(node, scopeHandle, stack, exporting);
+				for (auto& use : usings)
+				{
+					auto type = GetType(use.second);
+					auto memberScope = GetScope(type->members);
+					memberScope->InjectMembersTo(GetScope(use.first));
+				}
+				usings.clear();
 			}
 	
 			auto scopeHandle = GetScopeFromNodeID(node.id);

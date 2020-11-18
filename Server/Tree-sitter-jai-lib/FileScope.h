@@ -39,6 +39,10 @@ struct FileScope
 	TSInputEdit* edits;
 	int editCount;
 
+	std::vector<std::pair<ScopeHandle, TypeHandle>> usings;
+
+	static constexpr bool INCREMENTAL_ANALYSIS = false;
+
 	void Clear()
 	{
 		imports.clear();
@@ -246,6 +250,7 @@ struct FileScope
 	void HandleMemberReference(TSNode rhsNode, ScopeStack& stack, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex);
 	void HandleVariableReference(TSNode node, ScopeStack& stack, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex);
 	void HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope, std::vector<std::tuple<Hash, TSNode>>& unresolvedTypes, std::vector<TSNode>& structs, bool exporting);
+	void HandleUsingStatement(TSNode node, ScopeHandle scope, std::vector<std::tuple<Hash, TSNode>>& unresolvedTypes, std::vector<TSNode>& structs, bool& exporting);
 	void FindDeclarations(TSNode scopeNode, ScopeHandle scope, ScopeStack& stack, bool& exporting, bool rebuild = false);
 	void HandleFunctionDefnitionParameters(TSNode node, ScopeHandle currentScope, std::vector<std::tuple<Hash, TSNode>>& unresolvedNodes, Cursor& cursor);
 	TypeHandle HandleFuncDefinitionNode(TSNode node, std::vector<TSNode>& structs, DeclarationFlags& flags);

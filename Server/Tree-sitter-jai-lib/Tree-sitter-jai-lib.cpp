@@ -118,7 +118,7 @@ bool GetScopeForNode(const TSNode& node, FileScope* scope, ScopeHandle* handle)
 bool GetScopeAndParentForNode(const TSNode& node, FileScope* scope, TSNode* outParentNode, ScopeHandle* handle)
 {
 	auto parent = ts_node_parent(node);
-	while (!scope->ContainsScope(parent.id))
+	while (!scope->offsetToHandle.Contains(parent.context[0]))
 	{
 		if (ts_node_is_null(parent))
 		{
@@ -129,7 +129,7 @@ bool GetScopeAndParentForNode(const TSNode& node, FileScope* scope, TSNode* outP
 	}
 
 	*outParentNode = parent;
-	*handle = scope->GetScopeFromNodeID(parent.id);
+	*handle = scope->offsetToHandle.Get(parent.context[0]);
 	return true;
 }
 
@@ -471,30 +471,38 @@ export long long UpdateTree(uint64_t hashValue)
 		tree,
 		input);
 
-	uint32_t rangeCount;
-	auto ranges = ts_tree_get_changed_ranges(tree, editedTree, &rangeCount);
-	auto root = ts_tree_root_node(editedTree);
 
 	g_trees.Write(documentHash, editedTree);
-
-
 	auto fileScope = g_fileScopes.Read(documentHash).value();
 
-	if (rangeCount > 0)
+
+	if constexpr (fileScope->INCREMENTAL_ANALYSIS)
 	{
-		auto changedNode = ts_node_named_descendant_for_byte_range(root, ranges[0].start_byte, ranges[0].end_byte);
-		fileScope->RebuildScope(changedNode, s_edits.data(), (int)s_edits.size(), root);
+		uint32_t rangeCount;
+		auto ranges = ts_tree_get_changed_ranges(tree, editedTree, &rangeCount);
+		auto root = ts_tree_root_node(editedTree);
+
+		if (rangeCount > 0)
+		{
+			auto changedNode = ts_node_named_descendant_for_byte_range(root, ranges[0].start_byte, ranges[0].end_byte);
+			fileScope->RebuildScope(changedNode, s_edits.data(), (int)s_edits.size(), root);
+		}
+		else
+		{
+			auto changedNode = ts_node_named_descendant_for_byte_range(root, s_edits[0].start_byte, s_edits[0].new_end_byte);
+			fileScope->RebuildScope(changedNode, s_edits.data(), (int)s_edits.size(), root);
+		}
+
+		s_edits.clear();
+
+
+		free(ranges);
 	}
 	else
 	{
-		auto changedNode = ts_node_named_descendant_for_byte_range(root, s_edits[0].start_byte, s_edits[0].new_end_byte);
-		fileScope->RebuildScope(changedNode, s_edits.data(), (int)s_edits.size(), root);
+		fileScope->Build();
 	}
-		
-	s_edits.clear();
 
-
-	free(ranges);
 	ts_parser_delete(parser);
 	ts_tree_delete(tree);
 
