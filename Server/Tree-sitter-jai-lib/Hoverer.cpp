@@ -93,7 +93,7 @@ std::optional<ScopeDeclaration> EvaluateMemberAccess(TSNode node, FileScope* fil
 		}
 	}
 
-	if (!lhsType)
+	if (!lhsType || ( (lhsType->flags & DeclarationFlags::Evaluated) == 0) )
 		return std::nullopt;
 
 	if (ts_node_symbol(node) == g_constants.memberAccessNothing)
@@ -101,6 +101,12 @@ std::optional<ScopeDeclaration> EvaluateMemberAccess(TSNode node, FileScope* fil
 
 	auto rhs = ts_node_named_child(node, 1);
 	auto rhsHash = GetIdentifierHash(rhs, buffer);
+	if (lhsType->type.fileIndex >= g_fileScopes.size())
+	{
+		auto cool = 10;
+		cool++;
+	}
+		
 	auto typeKing = GetType(lhsType->type);
 
 	if (typeKing)
@@ -195,9 +201,12 @@ const TypeKing* GetTypeForNode(TSNode node, FileScope* fileScope, GapBuffer* buf
 {
 	if (auto decl = GetDeclarationForNode(node, fileScope, buffer))
 	{
-		if (auto type = GetType(decl->type))
+		if (decl->flags & DeclarationFlags::Evaluated)
 		{
-			return type;
+			if (auto type = GetType(decl->type))
+			{
+				return type;
+			}
 		}
 	}
 
@@ -261,7 +270,7 @@ export void GetSignature(uint64_t hashValue, int row, int col, const char*** out
 	{
 		strings.push_back(type->name.c_str());
 
-		*outParameterCount = type->parameters.size();
+		*outParameterCount = (int)type->parameters.size();
 		for (auto& str : type->parameters)
 		{
 			strings.push_back(str.c_str());
@@ -284,7 +293,7 @@ export void GetSignature(uint64_t hashValue, int row, int col, const char*** out
 			{
 				// found a comma
 				auto commaPos = ts_node_start_point(node);
-				if (col <= commaPos.column && row <= commaPos.row)
+				if (col <= (int)commaPos.column && row <= (int)commaPos.row)
 				{
 					foundIt = true;
 				}
@@ -313,7 +322,7 @@ export void GetSignature(uint64_t hashValue, int row, int col, const char*** out
 			}
 		}
 
-		*errorCount = errors.size();
+		*errorCount = (int)errors.size();
 		*outErrors = errors.data();
 		*outActiveParameter = param;
 	}

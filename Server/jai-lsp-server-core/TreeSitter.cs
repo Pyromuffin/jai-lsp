@@ -77,6 +77,7 @@ namespace jai_lsp
         [DllImport(dllpath)]
         extern static public void GetSignature(ulong hashValue, int row, int col, out IntPtr signature, out int parameterCount, out int activeParameter, out int parameterErrorCount, out IntPtr parameterErrorRanges);
 
-
+        [DllImport(dllpath)]
+        extern static public void RegisterModule([MarshalAs(UnmanagedType.LPStr)] string document, [MarshalAs(UnmanagedType.LPStr)] string moduleName);
     }
 }

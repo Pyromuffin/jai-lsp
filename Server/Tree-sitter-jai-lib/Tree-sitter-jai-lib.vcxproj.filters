@@ -74,6 +74,7 @@
     <ClCompile Include="Hashmap.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="UsingSorter.ixx" />
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="NatvisFile.natvis" />

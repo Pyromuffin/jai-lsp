@@ -21,8 +21,9 @@ ConcurrentDictionary<Module*> g_modules;
 ConcurrentDictionary<FileScope*> g_fileScopes;
 std::vector<const FileScope*> g_fileScopeByIndex;
 ConcurrentDictionary<std::string> g_filePaths;
-static std::mutex hope;
+std::mutex hope;
 
+std::atomic<bool> g_registered;
 TSLanguage* g_jaiLang;
 Constants g_constants;
 
@@ -262,8 +263,14 @@ export long long EditTree(uint64_t hashValue, const char* change, int startLine,
 	return timer.GetMicroseconds();
 }
 
-static void HandleLoad(Hash documentHash)
+void HandleLoad(Hash documentHash)
 {
+	if (auto file = g_fileScopes.Read(documentHash))
+	{
+		if (!(*file)->dirty)
+			return;
+	}
+
 	auto path = g_filePaths.Read(documentHash).value();
 
 	std::ifstream t(path);
@@ -275,6 +282,7 @@ static void HandleLoad(Hash documentHash)
 
 	CreateTree(path.c_str(), buffer.c_str(), (uint32_t)buffer.length());
 
+	/*
 	// if this has loads handle them too
 	auto fileScope = g_fileScopes.Read(documentHash).value();
 
@@ -282,6 +290,7 @@ static void HandleLoad(Hash documentHash)
 	{
 		HandleLoad(load);
 	}
+	*/
 }
 
 
@@ -312,6 +321,8 @@ void IncrementalUpdate(TSTree* oldTree, TSTree* newTree)
 
 export long long CreateTree(const char* documentPath, const char* code, int length)
 {
+	//while (!g_registered);
+
 	auto timer = Timer("");
 
 	auto documentHash = StringHash(documentPath);
@@ -369,6 +380,7 @@ export long long CreateTree(const char* documentPath, const char* code, int leng
 	//timings->scopeTime = timer.GetMicroseconds();
 	// handle loads!
 	
+	/*
 	auto fileScope = g_fileScopes.Read(documentHash).value();
 	
 	
@@ -376,7 +388,7 @@ export long long CreateTree(const char* documentPath, const char* code, int leng
 	{
 		HandleLoad(load);
 	}
-	
+	*/
 
 	return timer.GetMicroseconds();
 }
@@ -474,6 +486,7 @@ export long long UpdateTree(uint64_t hashValue)
 
 	g_trees.Write(documentHash, editedTree);
 	auto fileScope = g_fileScopes.Read(documentHash).value();
+	fileScope->dirty = true;
 
 
 	if constexpr (fileScope->INCREMENTAL_ANALYSIS)
@@ -510,7 +523,6 @@ export long long UpdateTree(uint64_t hashValue)
 }
 
 
-
 export long long GetTokens(uint64_t hashValue, SemanticToken** outTokens, int* count)
 {
 	auto t = Timer("");
@@ -521,7 +533,6 @@ export long long GetTokens(uint64_t hashValue, SemanticToken** outTokens, int* c
 
 	return t.GetMicroseconds();
 }
-
 
 
 /*

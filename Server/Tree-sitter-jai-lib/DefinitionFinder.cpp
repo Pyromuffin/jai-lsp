@@ -56,7 +56,7 @@ export void FindDefinition(uint64_t hashValue, int row, int col, uint64_t* outFi
 		*outFileHash = documentName.value;
 		*outTargetRange = NodeToRange(parent);
 		// wow this is dumb but we're going to query the tree to get the node for the declaration offset! hope that offset isn't stale!
-		auto definitionNode = ts_node_named_descendant_for_byte_range(root, entry.value().startByte, entry.value().startByte + entry.value().length);
+		auto definitionNode = ts_node_named_descendant_for_byte_range(root, entry.value().startByte, entry.value().startByte + entry->GetLength());
 		*outSelectionRange = NodeToRange(definitionNode);
 		ts_tree_delete(tree);
 		return;
@@ -68,7 +68,7 @@ export void FindDefinition(uint64_t hashValue, int row, int col, uint64_t* outFi
 		{
 			auto entry = decl.value();
 			*outFileHash = documentName.value;
-			auto definitionNode = ts_node_named_descendant_for_byte_range(root, entry.startByte, entry.startByte + entry.length);
+			auto definitionNode = ts_node_named_descendant_for_byte_range(root, entry.startByte, entry.startByte + entry.GetLength());
 			*outTargetRange = NodeToRange(definitionNode);
 			*outSelectionRange = NodeToRange(definitionNode);
 			ts_tree_delete(tree);
@@ -90,7 +90,7 @@ export void FindDefinition(uint64_t hashValue, int row, int col, uint64_t* outFi
 
 					auto loadedTree = ts_tree_copy(g_trees.Read(load).value());
 					auto loadedRoot = ts_tree_root_node(loadedTree);
-					auto definitionNode = ts_node_named_descendant_for_byte_range(loadedRoot, entry.startByte, entry.startByte + entry.length);
+					auto definitionNode = ts_node_named_descendant_for_byte_range(loadedRoot, entry.startByte, entry.startByte + entry.GetLength());
 					*outTargetRange = NodeToRange(definitionNode);
 					*outSelectionRange = NodeToRange(definitionNode);
 

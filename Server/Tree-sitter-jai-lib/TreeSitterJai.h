@@ -4,11 +4,12 @@
 #include <shared_mutex>
 #include <tree_sitter/api.h>
 #include "GapBuffer.h"
+#include <cassert>
 
 #define export extern "C" __declspec(dllexport)
 extern "C" TSLanguage * tree_sitter_jai();
 extern TSLanguage* g_jaiLang;
-
+extern std::atomic<bool> g_registered;
 
 
 
@@ -106,17 +107,61 @@ enum DeclarationFlags : uint8_t
 	Enum = 1 << 3,
 	Function =  1 << 4,
 	BuiltIn = 1 << 5,
+	Evaluated = 1 << 7,
 };
+
 
 struct ScopeDeclaration
 {
-	DeclarationFlags flags;
-	uint16_t length;
-	uint16_t fileIndex;
+	// we need to find somewhere to put the RHS offset from the start byte.
+
 	uint32_t startByte;
-	TypeHandle
-		type;
+	DeclarationFlags flags;
+
+private:
+	uint8_t length;
+	uint8_t rhsOffset;
+	uint8_t fourForEach;
+
+public:
+	union {
+		TypeHandle type;
+		const void* id;
+	};
+
+	uint16_t GetLength() const
+	{
+		uint16_t length = this->length;
+		length += (fourForEach & 0xF0);
+		return length;
+	}
+
+	uint16_t GetRHSOffset() const
+	{
+		uint16_t rhsOffset = this->rhsOffset;
+		rhsOffset += (fourForEach << 4);
+		return rhsOffset;
+	}
+
+	void SetLength(uint16_t length)
+	{
+		assert(length < 4096);
+		this->length = (length & 0xFF);
+		fourForEach &= 0X0F;
+		length &= 0X0F;
+		fourForEach |= (length >> 4);
+	}
+
+	void SetRHSOffset(uint16_t rhsOffset)
+	{
+		assert(rhsOffset < 4096);
+		this->rhsOffset = (rhsOffset & 0xFF);
+		fourForEach &= 0XF0;
+		fourForEach |= (rhsOffset >> 8);
+	}
 };
+
+constexpr int nodesize = sizeof(ScopeDeclaration);
 
 struct Range
 {
@@ -140,7 +185,7 @@ struct alignas(64) Scope
 {
 	static constexpr int small_size = 8;
 
-private:
+public:
 #if SMALL
 	Hash small_hashes[small_size];
 	ScopeDeclaration small_declarations[small_size];
@@ -148,9 +193,10 @@ private:
 	std::unordered_map<Hash, ScopeDeclaration> declarations;
 	int size;
 
-public:
 	TypeHandle associatedType = TypeHandle::Null();
 	bool imperative;
+	ScopeHandle parent;
+
 
 	void Clear()
 	{
@@ -218,7 +264,7 @@ public:
 				if (imperative && (int)decl.startByte > upTo)
 					continue;
 
-				for (int i = 0; i < decl.length; i++)
+				for (int i = 0; i < decl.GetLength(); i++)
 					str.push_back(buffer->GetChar(decl.startByte + i));
 				
 				str.push_back(',');
@@ -236,7 +282,7 @@ public:
 			if (imperative && (int)kvp.second.startByte > upTo)
 				continue;
 
-			for (int i = 0; i < kvp.second.length; i++)
+			for (int i = 0; i < kvp.second.GetLength(); i++)
 				str.push_back(buffer->GetChar(kvp.second.startByte + i));
 
 			str.push_back(',');
@@ -253,7 +299,7 @@ public:
 				auto decl = small_declarations[i];
 				if (decl.flags & DeclarationFlags::Exported)
 				{
-					for (int i = 0; i < decl.length; i++)
+					for (int i = 0; i < decl.GetLength(); i++)
 						str.push_back(buffer->GetChar(decl.startByte + i));
 
 					str.push_back(',');
@@ -267,7 +313,7 @@ public:
 		{
 			if (kvp.second.flags & DeclarationFlags::Exported)
 			{
-				for (int i = 0; i < kvp.second.length; i++)
+				for (int i = 0; i < kvp.second.GetLength(); i++)
 					str.push_back(buffer->GetChar(kvp.second.startByte + i));
 
 				str.push_back(',');
@@ -351,6 +397,15 @@ struct ConcurrentDictionary
 		mutex.lock();
 		dict[key] = value;
 		mutex.unlock();
+	}
+
+	size_t size()
+	{
+		mutex.lock();
+		auto size = dict.size();
+		mutex.unlock();
+
+		return size;
 	}
 };
 

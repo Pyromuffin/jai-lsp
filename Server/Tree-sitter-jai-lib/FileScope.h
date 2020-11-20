@@ -2,7 +2,7 @@
 #include "TreeSitterJai.h"
 #include "Hashmap.h"
 #include <assert.h>
-
+#include <future>
 
 struct ScopeStack
 {
@@ -36,10 +36,16 @@ struct FileScope
 
 	Cursor scope_builder_cursor;
 
+	std::mutex declarationsFoundMutex;
+	std::condition_variable declarationsFoundCondition;
+	bool declarationsFound;
+
 	TSInputEdit* edits;
 	int editCount;
 
+	std::vector<std::future<void>> loadFutures;
 	std::vector<std::pair<ScopeHandle, TypeHandle>> usings;
+	std::atomic<bool> dirty = true;
 
 	static constexpr bool INCREMENTAL_ANALYSIS = false;
 
@@ -47,6 +53,7 @@ struct FileScope
 	{
 		imports.clear();
 		loads.clear();
+		loadFutures.clear();
 		types.clear();
 		_nodeToScopes.clear();
 		tokens.clear();
@@ -55,6 +62,7 @@ struct FileScope
 		scopePresentBitmap[0].clear();
 		scopePresentBitmap[1].clear();
 		offsetToHandle.Clear();
+		declarationsFound = false;
 	}
 
 
@@ -68,6 +76,9 @@ struct FileScope
 
 	Scope* GetScope(ScopeHandle handle)
 	{
+		if (handle.index == UINT16_MAX)
+			return nullptr;
+
 		return &scopeKings[handle.index];
 	}
 
@@ -169,7 +180,7 @@ struct FileScope
 			offset = UnEditStartByte(offset, edits[i].start_byte, edits[i].new_end_byte, edits[i].old_end_byte);
 		}
 
-		int index = offsetToHandle.GetIndex(offset);
+		int index = (int)offsetToHandle.GetIndex(offset);
 
 		if (index >= 0)
 		{
@@ -198,7 +209,7 @@ struct FileScope
 
 
 
-	ScopeHandle AllocateScope(TSNode node)
+	ScopeHandle AllocateScope(TSNode node, ScopeHandle parent)
 	{
 		if (scopeKingFreeList.size() > 0)
 		{
@@ -206,6 +217,7 @@ struct FileScope
 			scopeKingFreeList.pop_back();
 			_nodeToScopes[node.id] = back;
 			GetScope(back)->Clear();
+			GetScope(back)->parent = parent;
 
 			return back;
 		}
@@ -219,6 +231,7 @@ struct FileScope
 		}
 
 		auto handle = ScopeHandle{ .index = static_cast<uint16_t>(scopeKings.size() - 1) };
+		GetScope(handle)->parent = parent;
 		_nodeToScopes[node.id] = handle;
 
 		return handle;
@@ -249,15 +262,19 @@ struct FileScope
 
 	void HandleMemberReference(TSNode rhsNode, ScopeStack& stack, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex);
 	void HandleVariableReference(TSNode node, ScopeStack& stack, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex);
-	void HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope, std::vector<std::tuple<Hash, TSNode>>& unresolvedTypes, std::vector<TSNode>& structs, bool exporting);
-	void HandleUsingStatement(TSNode node, ScopeHandle scope, std::vector<std::tuple<Hash, TSNode>>& unresolvedTypes, std::vector<TSNode>& structs, bool& exporting);
+	TypeHandle GetDeclRHS(const TSNode nameNode, ScopeHandle currentScope);
+	void HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope, std::vector<TSNode>& structs, bool exporting);
+	void HandleUsingStatement(TSNode node, ScopeHandle scope, std::vector<TSNode>& structs, bool& exporting);
 	void FindDeclarations(TSNode scopeNode, ScopeHandle scope, ScopeStack& stack, bool& exporting, bool rebuild = false);
-	void HandleFunctionDefnitionParameters(TSNode node, ScopeHandle currentScope, std::vector<std::tuple<Hash, TSNode>>& unresolvedNodes, Cursor& cursor);
-	TypeHandle HandleFuncDefinitionNode(TSNode node, std::vector<TSNode>& structs, DeclarationFlags& flags);
+	void HandleFunctionDefnitionParameters(TSNode node, ScopeHandle currentScope, Cursor& cursor);
+	TypeHandle HandleFuncDefinitionNode(TSNode node, ScopeHandle currentScope, std::vector<TSNode>& structs, DeclarationFlags& flags);
 	void CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& exporting);
+	void DoTypeCheckingAndInference(TSTree* tree);
+	void WaitForDependencies();
 	void Build();
 	void DoTokens(TSNode root, TSInputEdit* edits, int editCount);
 	const std::optional<TypeHandle> EvaluateNodeExpressionType(TSNode node, const GapBuffer* buffer, ScopeHandle current, ScopeStack& stack);
+	const std::optional<TypeHandle> EvaluateNodeExpressionType(TSNode node, const GapBuffer* buffer, Scope* scope);
 	void RebuildScope(TSNode newScopeNode, TSInputEdit* edits, int editCount, TSNode root);
 
 

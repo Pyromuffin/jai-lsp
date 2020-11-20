@@ -195,6 +195,7 @@
     <ClCompile Include="stb_ds.cpp" />
     <ClCompile Include="Timer.cpp" />
     <ClCompile Include="Tree-sitter-jai-lib.cpp" />
+    <ClCompile Include="UsingSorter.ixx" />
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="NatvisFile.natvis" />

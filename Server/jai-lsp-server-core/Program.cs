@@ -71,12 +71,11 @@ namespace jai_lsp
                         .AddSingleton<Diagnoser>();
                     })
 
-
                     .OnStarted(async (languageServer, token) =>
                     {
 
                         using var manager = await languageServer.WorkDoneManager.Create(new WorkDoneProgressBegin() { Title = "Parsing Modules", Percentage = 0, Cancellable = true });
-
+                        
                         var logger = languageServer.Services.GetService<ILogger<Logjam>>();
                         var namer = languageServer.Services.GetService<HashNamer>();
                         var diagnoser = languageServer.Services.GetService<Diagnoser>();
@@ -84,6 +83,7 @@ namespace jai_lsp
 
                         WorkspaceFolderParams wsf = new WorkspaceFolderParams();
                         var wsfresults = await languageServer.Client.SendRequest(wsf, token);
+                        List<Tuple<string, string>> modules = new List<Tuple<string, string>>();
 
                         foreach (var folder in wsfresults)
                         {
@@ -112,23 +112,31 @@ namespace jai_lsp
 
                                 if (exists)
                                 {
-                                    var task = Task.Run(
+                                    modules.Add(new Tuple<string,string>(moduleFilePath, moduleName) );
 
-                                            () =>
-                                            {
-                                                TreeSitter.CreateTreeFromPath(moduleFilePath, moduleName);
-                                                return moduleFilePath;
-                                            }
-
-                                         );
-                                    tasks.Add(task);
+                                
                                     //totalTime += TreeSitter.CreateTreeFromPath(moduleFilePath, moduleName);
                                     //current++;
                                 }
 
                             }
 
+                            foreach(var module in modules)
+                            {
+                                TreeSitter.RegisterModule(module.Item1, module.Item2);
+                            }
 
+                            foreach (var module in modules)
+                            {
+                                var task = Task.Run(() =>
+                                             {
+                                                TreeSitter.CreateTreeFromPath(module.Item1, module.Item2);
+                                                return module.Item1;
+                                            });
+                                tasks.Add(task);
+                            }
+
+                            
                             while (current < tasks.Count)
                             {
                                 var task = await Task.WhenAny(tasks);

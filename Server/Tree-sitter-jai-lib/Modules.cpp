@@ -19,7 +19,31 @@ std::optional<ScopeDeclaration> Module::Search(Hash hash)
 	return moduleFile->SearchExports(hash);
 }
 
+extern std::mutex hope;
 
+export void RegisterModule(const char* document, const char* moduleName)
+{
+	auto documentHash = StringHash(document);
+
+	auto scope = new FileScope();
+	scope->documentHash = documentHash;
+
+	// this is still not super thread safe because there's no lock around the people who are reading this array.
+	hope.lock(); // hope this fixes it!
+	scope->fileIndex = (uint16_t)g_fileScopeByIndex.size();
+	g_fileScopeByIndex.push_back(scope);
+	hope.unlock();
+
+	g_fileScopes.Write(documentHash, scope);
+
+	auto mod = new Module();
+	mod->moduleFile = scope;
+	mod->moduleFileHash = documentHash;
+
+	auto moduleNameHash = StringHash(moduleName);
+	g_modules.Write(moduleNameHash, mod);
+
+}
 
 export long long CreateTreeFromPath(const char* document, const char* moduleName)
 {
@@ -33,18 +57,7 @@ export long long CreateTreeFromPath(const char* document, const char* moduleName
 	t.seekg(0);
 	t.read(&buffer[0], size);
 
-	auto documentHash = StringHash(document);
-
-	CreateTree(document, buffer.c_str(), buffer.length());
-	// take the tree and create a module scope
-	auto fileScope = g_fileScopes.Read(documentHash).value();
-
-	auto mod = new Module();
-	mod->moduleFile = fileScope;
-	mod->moduleFileHash = documentHash;
-
-	auto moduleNameHash = StringHash(moduleName);
-	g_modules.Write(moduleNameHash, mod); // don't publish the module before its ready!
+	CreateTree(document, buffer.c_str(), (int)buffer.length());
 
 	return timer.GetMicroseconds();
 }
