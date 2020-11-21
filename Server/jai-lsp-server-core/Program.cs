@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using MediatR;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Server;
@@ -7,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 namespace jai_lsp
@@ -70,11 +72,17 @@ namespace jai_lsp
                         .AddSingleton<HashNamer>()
                         .AddSingleton<Diagnoser>();
                     })
-
+                    
+                    .OnInitialized(async (server,  request,  response,  cancellationToken) =>
+                    {
+                 
+                        var path = Path.Combine(request.RootUri.GetFileSystemPath(), "modules");
+                        TreeSitter.AddModuleDirectory(path);
+                    })
                     .OnStarted(async (languageServer, token) =>
                     {
 
-                        using var manager = await languageServer.WorkDoneManager.Create(new WorkDoneProgressBegin() { Title = "Parsing Modules", Percentage = 0, Cancellable = true });
+                        //using var manager = await languageServer.WorkDoneManager.Create(new WorkDoneProgressBegin() { Title = "Parsing Modules", Percentage = 0, Cancellable = true });
                         
                         var logger = languageServer.Services.GetService<ILogger<Logjam>>();
                         var namer = languageServer.Services.GetService<HashNamer>();
@@ -83,7 +91,6 @@ namespace jai_lsp
 
                         WorkspaceFolderParams wsf = new WorkspaceFolderParams();
                         var wsfresults = await languageServer.Client.SendRequest(wsf, token);
-                        List<Tuple<string, string>> modules = new List<Tuple<string, string>>();
 
                         foreach (var folder in wsfresults)
                         {
@@ -93,7 +100,9 @@ namespace jai_lsp
                             {
                                 namer.hashToName[Hash.StringHash(f)] = f;
                             }
-
+                        }
+                            /*
+                             * 
                             var path = Path.Combine(folder.Uri.GetFileSystemPath(), "modules");
                             var moduleDirectories = Directory.EnumerateDirectories(path);
                             var count = moduleDirectories.Count();
@@ -148,6 +157,7 @@ namespace jai_lsp
 
                         }
                         manager.OnCompleted();
+                        */
                     })
 
             );

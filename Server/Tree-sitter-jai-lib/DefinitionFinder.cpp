@@ -22,7 +22,7 @@ static Range NodeToRange(TSNode node)
 }
 
 
-export void FindDefinition(uint64_t hashValue, int row, int col, uint64_t* outFileHash, Range* outOriginRange, Range* outTargetRange, Range* outSelectionRange)
+export_jai_lsp void FindDefinition(uint64_t hashValue, int row, int col, uint64_t* outFileHash, Range* outOriginRange, Range* outTargetRange, Range* outSelectionRange)
 {
 	auto documentName = Hash{ .value = hashValue };
 

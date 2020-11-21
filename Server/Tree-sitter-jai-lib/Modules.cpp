@@ -1,16 +1,12 @@
-#include "TreeSitterJai.h"
-#include "FileScope.h"
-#include "Timer.h"
 #include <filesystem>
 #include <fstream>
 
+#include "TreeSitterJai.h"
+#include "FileScope.h"
+#include "Timer.h"
+#include "Concurrent.h"
 
-
-void Module::BuildExportedScope()
-{
-
-
-}
+ConcurrentVector<std::string> g_modulePaths;
 
 std::optional<ScopeDeclaration> Module::Search(Hash hash)
 {
@@ -19,33 +15,9 @@ std::optional<ScopeDeclaration> Module::Search(Hash hash)
 	return moduleFile->SearchExports(hash);
 }
 
-extern std::mutex hope;
 
-export void RegisterModule(const char* document, const char* moduleName)
-{
-	auto documentHash = StringHash(document);
 
-	auto scope = new FileScope();
-	scope->documentHash = documentHash;
-
-	// this is still not super thread safe because there's no lock around the people who are reading this array.
-	hope.lock(); // hope this fixes it!
-	scope->fileIndex = (uint16_t)g_fileScopeByIndex.size();
-	g_fileScopeByIndex.push_back(scope);
-	hope.unlock();
-
-	g_fileScopes.Write(documentHash, scope);
-
-	auto mod = new Module();
-	mod->moduleFile = scope;
-	mod->moduleFileHash = documentHash;
-
-	auto moduleNameHash = StringHash(moduleName);
-	g_modules.Write(moduleNameHash, mod);
-
-}
-
-export long long CreateTreeFromPath(const char* document, const char* moduleName)
+export_jai_lsp long long CreateTreeFromPath(const char* document, const char* moduleName)
 {
 	// for modules
 	auto timer = Timer("");
@@ -60,4 +32,83 @@ export long long CreateTreeFromPath(const char* document, const char* moduleName
 	CreateTree(document, buffer.c_str(), (int)buffer.length());
 
 	return timer.GetMicroseconds();
+}
+
+
+export_jai_lsp void AddModuleDirectory(const char* moduleDirectory)
+{
+	g_modulePaths.Append(moduleDirectory);
+}
+
+
+bool ModuleFileExists(std::string name)
+{
+	auto modulePathCount = g_modulePaths.size();
+
+	if (modulePathCount == 0)
+		return false;
+
+	for (int i = 0; i < modulePathCount; i++)
+	{
+		auto path = std::filesystem::path(g_modulePaths.Read(i));
+		path = path.append(name);
+		path = path.append("module.jai");
+
+		if (std::filesystem::exists(path))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+
+
+std::optional<std::filesystem::path> ModuleFilePath(std::string name)
+{
+	auto modulePathCount = g_modulePaths.size();
+	assert(modulePathCount > 0);
+
+	if (modulePathCount == 0)
+		return std::nullopt;
+
+	for (int i = 0; i < modulePathCount; i++)
+	{
+		auto path = std::filesystem::path(g_modulePaths.Read(i));
+		path = path.append(name);
+		path = path.append("module.jai");
+
+		if (std::filesystem::exists(path))
+		{
+			return path;
+		}
+	}
+
+	return std::nullopt;
+}
+
+
+Module* RegisterModule(std::string moduleName, std::filesystem::path path)
+{
+	auto pathStr = path.string();
+	auto documentHash = StringHash(pathStr);
+
+	auto scope = new FileScope();
+	scope->documentHash = documentHash;
+
+	scope->fileIndex = (uint16_t)g_fileScopeByIndex.size();
+	g_fileScopeByIndex.Append(scope);
+	g_fileScopes.Write(documentHash, scope);
+	g_filePaths.Write(documentHash, pathStr);
+
+	auto mod = new Module();
+	mod->moduleFile = scope;
+	mod->moduleFileHash = documentHash;
+
+	auto moduleNameHash = StringHash(moduleName);
+	g_modules.Write(moduleNameHash, mod);
+
+	return mod;
 }

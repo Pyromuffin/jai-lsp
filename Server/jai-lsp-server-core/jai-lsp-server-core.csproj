@@ -25,12 +25,4 @@
     <PackageReference Include="OmniSharp.Extensions.LanguageServer" Version="0.18.2" />
     <PackageReference Include="Serilog.Extensions.Logging" Version="3.0.1" />
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Tree-sitter-jai-lib\Tree-sitter-jai-lib.vcxproj">
-      <Name>tree-sitter-jai-wrapper</Name>
-      <ReferenceOutputAssembly>true</ReferenceOutputAssembly>
-      <OutputItemType>Content</OutputItemType>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </ProjectReference>
-  </ItemGroup>
 </Project>

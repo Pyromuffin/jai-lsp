@@ -36,14 +36,16 @@ struct FileScope
 
 	Cursor scope_builder_cursor;
 
+	/*
 	std::mutex declarationsFoundMutex;
 	std::condition_variable declarationsFoundCondition;
 	bool declarationsFound;
+	*/
 
 	TSInputEdit* edits;
 	int editCount;
 
-	std::vector<std::future<void>> loadFutures;
+	std::vector<std::future<bool>> loadFutures;
 	std::vector<std::pair<ScopeHandle, TypeHandle>> usings;
 	std::atomic<bool> dirty = true;
 
@@ -62,7 +64,7 @@ struct FileScope
 		scopePresentBitmap[0].clear();
 		scopePresentBitmap[1].clear();
 		offsetToHandle.Clear();
-		declarationsFound = false;
+		//declarationsFound = false;
 	}
 
 
@@ -251,7 +253,7 @@ struct FileScope
 		if(handle.fileIndex == fileIndex)
 			return &types[handle.index];
 
-		return &g_fileScopeByIndex[handle.fileIndex]->types[handle.index];
+		return &g_fileScopeByIndex.Read(handle.fileIndex)->types[handle.index];
 	}
 
 	std::optional<ScopeDeclaration> TryGet(Hash hash) const
@@ -262,7 +264,6 @@ struct FileScope
 
 	void HandleMemberReference(TSNode rhsNode, ScopeStack& stack, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex);
 	void HandleVariableReference(TSNode node, ScopeStack& stack, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex);
-	TypeHandle GetDeclRHS(const TSNode nameNode, ScopeHandle currentScope);
 	void HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope, std::vector<TSNode>& structs, bool exporting);
 	void HandleUsingStatement(TSNode node, ScopeHandle scope, std::vector<TSNode>& structs, bool& exporting);
 	void FindDeclarations(TSNode scopeNode, ScopeHandle scope, ScopeStack& stack, bool& exporting, bool rebuild = false);
@@ -272,37 +273,11 @@ struct FileScope
 	void DoTypeCheckingAndInference(TSTree* tree);
 	void WaitForDependencies();
 	void Build();
+	void DoTokens2();
 	void DoTokens(TSNode root, TSInputEdit* edits, int editCount);
 	const std::optional<TypeHandle> EvaluateNodeExpressionType(TSNode node, const GapBuffer* buffer, ScopeHandle current, ScopeStack& stack);
 	const std::optional<TypeHandle> EvaluateNodeExpressionType(TSNode node, const GapBuffer* buffer, Scope* scope);
 	void RebuildScope(TSNode newScopeNode, TSInputEdit* edits, int editCount, TSNode root);
-
-
-
-	/*
-	int SearchScopeOffsets(int offset, const TSInputEdit& edit)
-	{
-
-		auto comp = [=](int a, int b) {
-
-			auto edited = EditStartByte(a, edit.start_byte, edit.new_end_byte, edit.old_end_byte);
-			return edited < b;
-		};
-
-		auto it = std::lower_bound(scopeOffsets.begin(), scopeOffsets.end(), offset, comp);
-
-		if (it == scopeOffsets.end() || *it != offset)
-		{
-			return -1;
-		}
-		else
-		{
-			int index = std::distance(scopeOffsets.begin(), it);
-			return index;
-		}
-	}
-	*/
-
 
 
 };

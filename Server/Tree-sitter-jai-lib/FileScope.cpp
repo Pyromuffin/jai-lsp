@@ -2,7 +2,7 @@
 #include <cassert>
 #include <filesystem>
 
-void HandleLoad(Hash documentHash);
+bool HandleLoad(Hash documentHash);
 
 std::optional<ScopeDeclaration> FileScope::SearchExports(Hash identifierHash)
 {
@@ -69,7 +69,7 @@ std::optional<ScopeDeclaration> FileScope::Search(Hash identifierHash)
 
 static const TypeKing* GetGlobalType(TypeHandle handle)
 {
-	return g_fileScopeByIndex[handle.fileIndex]->GetType(handle);
+	return g_fileScopeByIndex.Read(handle.fileIndex)->GetType(handle);
 }
 
 void FileScope::HandleMemberReference(TSNode rhsNode, ScopeStack& stack, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex)
@@ -136,8 +136,8 @@ void FileScope::HandleVariableReference(TSNode node, ScopeStack& stack, std::vec
 	}
 
 	// if we get here then we've got an unresolved identifier, that we will check when we've parsed the entire document.
-	unresolvedEntry.push_back(node);
-	unresolvedTokenIndex.push_back((uint32_t)tokens.size());
+	//unresolvedEntry.push_back(node);
+	//unresolvedTokenIndex.push_back((uint32_t)tokens.size());
 	token.type = (TokenType)-1;
 
 done:
@@ -511,8 +511,9 @@ TypeHandle FileScope::HandleFuncDefinitionNode(TSNode node, ScopeHandle currentS
 }
 
 
-static const char* builtins[] = {
+static std::vector<const char*> builtins = {
 		"bool",
+		"float",
 		"float32",
 		"float64",
 		"char",
@@ -529,20 +530,21 @@ static const char* builtins[] = {
 		"void"
 };
 
-
+Module* RegisterModule(std::string moduleName, std::filesystem::path path);
+std::optional<std::filesystem::path> ModuleFilePath(std::string name);
 
 void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& exporting)
 {
 	file = AllocateScope(node, {UINT16_MAX} );
 	GetScope(file)->imperative = false;
 
-	for (int i = 0; i < 15; i++)
+	for (int i = 0; i < builtins.size(); i++)
 	{
 		auto handle = AllocateType();
 		auto king = &types[handle.index];
 		king->name = std::string(builtins[i]);
 		ScopeDeclaration decl;
-		decl.flags = DeclarationFlags::BuiltIn;
+		decl.flags = DeclarationFlags::BuiltIn | DeclarationFlags::Evaluated;
 		decl.type = handle;
 		GetScope(file)->Add(StringHash(builtins[i]), decl);
 	}
@@ -566,6 +568,22 @@ void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& export
 				buffer_view view = buffer_view(startOffset, endOffset, buffer);
 				auto moduleNameHash = StringHash(view);
 				imports.push_back(moduleNameHash);
+
+				if (auto mod = g_modules.Read(moduleNameHash))
+				{
+					if(mod.value()->moduleFile->dirty)
+						loadFutures.push_back( std::async(std::launch::async, HandleLoad, mod.value()->moduleFileHash));
+				}
+				else
+				{
+					auto moduleName = view.Copy();
+					if (auto modulePath = ModuleFilePath(moduleName))
+					{
+						// then we need to create the module.
+						auto mod = RegisterModule(moduleName, *modulePath);
+						loadFutures.push_back(std::async(std::launch::async, HandleLoad, mod->moduleFileHash));
+					}
+				}
 			}
 
 			// this doesn't respect non-top-level loads.
@@ -596,6 +614,13 @@ void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& export
 
 	for (auto& load : loads)
 	{
+		if (auto fileOpt = g_fileScopes.Read(documentHash))
+		{
+			auto file = fileOpt.value();
+			if (!file->dirty)
+				continue;
+		}
+
 		loadFutures.push_back(std::async(std::launch::async, HandleLoad, load));
 	}
 
@@ -609,8 +634,6 @@ void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& export
 
 void FileScope::DoTypeCheckingAndInference(TSTree* tree)
 {
-	Cursor cursor;
-
 
 	// so i think that we should be able to do this in order of scopes.
 	for (auto& scope : scopeKings)
@@ -643,15 +666,8 @@ void FileScope::DoTypeCheckingAndInference(TSTree* tree)
 
 					if (auto typeHandle = EvaluateNodeExpressionType(node, buffer, &scope))
 					{
-						if (typeHandle->fileIndex >= g_fileScopes.size() || typeHandle->index >= types.size())
-						{
-							auto cool = 10;
-							cool++;
-						}
-
 						decl.flags = decl.flags | DeclarationFlags::Evaluated;
 						decl.type = *typeHandle;
-
 					
 						resolvedAtLeastOne = true;
 					}
@@ -664,7 +680,39 @@ void FileScope::DoTypeCheckingAndInference(TSTree* tree)
 		}
 		else
 		{
-			// iterate through hash table
+			int unresolvedCount = scope.size;
+			while (resolvedAtLeastOne && unresolvedCount > 0)
+			{
+				resolvedAtLeastOne = false;
+				unresolvedCount = 0;
+				// iterate through hash table
+				for (auto& kvp : scope.declarations)
+				{
+					auto& decl = kvp.second;
+					if (decl.flags & DeclarationFlags::Evaluated)
+					{
+						continue;
+					}
+
+					TSNode node;
+					node.id = decl.id;
+					node.tree = tree;
+					node.context[0] = decl.startByte + decl.GetRHSOffset();
+					node.context[3] = 0;
+
+					if (auto typeHandle = EvaluateNodeExpressionType(node, buffer, &scope))
+					{
+						decl.flags = decl.flags | DeclarationFlags::Evaluated;
+						decl.type = *typeHandle;
+
+						resolvedAtLeastOne = true;
+					}
+					else
+					{
+						unresolvedCount++;
+					}
+				}
+			}
 		}
 	}
 
@@ -725,6 +773,7 @@ void FileScope::WaitForDependencies()
 	for (auto& future : loadFutures)
 	{
 		future.wait();
+		//auto result = future.get();
 	}
 
 	/*
@@ -741,7 +790,7 @@ void FileScope::WaitForDependencies()
 	*/
 
 	// i think this is ok!? however, recursive loads will deadlock.
-
+	/*
 	{
 		std::lock_guard lock{ declarationsFoundMutex };
 		declarationsFound = true;
@@ -761,7 +810,10 @@ void FileScope::WaitForDependencies()
 
 		}
 	}
+	*/
 }
+
+
 
 
 void FileScope::Build()
@@ -769,15 +821,50 @@ void FileScope::Build()
 	if (!dirty)
 		return;
 
-
 	Clear();
 
 	buffer = g_buffers.Read(documentHash).value();
 	auto tree = g_trees.Read(documentHash).value();
 	auto root = ts_tree_root_node(tree);
 
+	ScopeStack stack;
 
-	auto queryText =
+	bool exporting = true;
+	bool skipNextImperative = false;
+
+	CreateTopLevelScope(root, stack, exporting);
+
+	dirty = false;
+}
+
+void FileScope::DoTokens2()
+{
+	auto tree = g_trees.Read(documentHash).value();
+	auto root = ts_tree_root_node(tree);
+
+	WaitForDependencies();
+
+	DoTypeCheckingAndInference(tree);
+
+	for (auto& use : usings)
+	{
+		auto type = GetType(use.second);
+		auto memberScope = GetScope(type->members);
+		memberScope->InjectMembersTo(GetScope(use.first));
+	}
+	usings.clear();
+
+
+
+	ScopeStack stack;
+	stack.scopes.push_back(file);
+	std::vector<TSNode> unresolvedEntry;
+	std::vector<int> unresolvedTokenIndex;
+
+	bool exporting = true;
+	bool skipNextImperative = false;
+
+	static const auto queryText =
 		"(function_definition) @func_defn" // hopefully this matches before the identifiers does.
 		"(imperative_scope) @imperative.scope"
 		"(data_scope) @data.scope"
@@ -817,29 +904,6 @@ void FileScope::Build()
 		file_scope,
 	};
 
-	ScopeStack stack;
-	std::vector<TSNode> unresolvedEntry;
-	std::vector<int> unresolvedTokenIndex;
-
-	bool exporting = true;
-	bool skipNextImperative = false;
-
-	CreateTopLevelScope(root, stack, exporting);
-
-
-
-	WaitForDependencies();
-
-	DoTypeCheckingAndInference(tree);
-
-	for (auto& use : usings)
-	{
-		auto type = GetType(use.second);
-		auto memberScope = GetScope(type->members);
-		memberScope->InjectMembersTo(GetScope(use.first));
-	}
-	usings.clear();
-
 	int identifiersToSkip = 0;
 
 	Cursor functionBodyFinder;
@@ -873,7 +937,7 @@ void FileScope::Build()
 		case ScopeMarker::func_defn:
 		{
 			skipNextImperative = true;
-			
+
 			if (!ContainsScope(node.id)) // likely some error state
 			{
 				skipPopCount++;
@@ -911,7 +975,7 @@ void FileScope::Build()
 				usings.clear();
 				*/
 			}
-	
+
 			auto scopeHandle = GetScopeFromNodeID(node.id);
 			stack.scopes.push_back(scopeHandle);
 
@@ -962,15 +1026,15 @@ void FileScope::Build()
 		}
 	}
 
-	dirty = false;
-
 	ts_query_delete(query);
 	ts_query_cursor_delete(queryCursor);
 }
 
+
+
 void FileScope::DoTokens(TSNode root, TSInputEdit* edits, int editCount)
 {
-	auto queryText =
+	const static auto queryText =
 		"(function_definition) @func_defn" // hopefully this matches before the identifiers does.
 		"(imperative_scope) @imperative.scope"
 		"(data_scope) @data.scope"

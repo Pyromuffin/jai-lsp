@@ -76,6 +76,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
+    <OutDir>$(SolutionDir)jai-lsp-server-core\bin\$(Platform)\$(Configuration)\netcoreapp3.1\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -169,17 +170,21 @@
     </Lib>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Concurrent.h" />
     <ClInclude Include="DefinitionFinder.h" />
     <ClInclude Include="FileScope.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="GapBuffer.h" />
+    <ClInclude Include="Hash.h" />
     <ClInclude Include="Hashmap.h" />
+    <ClInclude Include="Scope.h" />
     <ClInclude Include="stb_ds.h" />
     <ClInclude Include="Timer.h" />
     <ClInclude Include="TreeSitterJai.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Completer.cpp" />
+    <ClCompile Include="Concurrent.cpp" />
     <ClCompile Include="DefinitionFinder.cpp" />
     <ClCompile Include="FileScope.cpp" />
     <ClCompile Include="GapBuffer.cpp" />
@@ -192,6 +197,7 @@
       <BasicRuntimeChecks Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Default</BasicRuntimeChecks>
     </ClCompile>
     <ClCompile Include="Modules.cpp" />
+    <ClCompile Include="Scope.cpp" />
     <ClCompile Include="stb_ds.cpp" />
     <ClCompile Include="Timer.cpp" />
     <ClCompile Include="Tree-sitter-jai-lib.cpp" />

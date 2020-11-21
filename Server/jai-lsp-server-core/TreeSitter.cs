@@ -79,5 +79,8 @@ namespace jai_lsp
 
         [DllImport(dllpath)]
         extern static public void RegisterModule([MarshalAs(UnmanagedType.LPStr)] string document, [MarshalAs(UnmanagedType.LPStr)] string moduleName);
+
+        [DllImport(dllpath)]
+        extern static public void AddModuleDirectory([MarshalAs(UnmanagedType.LPStr)] string moduleDirectory);
     }
 }

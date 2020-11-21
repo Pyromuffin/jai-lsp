@@ -156,8 +156,7 @@ namespace jai_lsp
             var now = DateTime.Now;
             IntPtr tokensPtr = IntPtr.Zero;
             int count = 0;
-            long internalMicros = TreeSitter.GetTokens
-                (hash, out tokensPtr, out count); // this is syncrhonous because we just get the data from native side.
+            long internalMicros = TreeSitter.GetTokens(hash, out tokensPtr, out count);  // this can be async because it actually does work.
             var then = DateTime.Now;
             var elapsed = then - now;
             _logger.LogInformation("Elapsed time for C++ tokens: " + elapsed.TotalMilliseconds + " native time: " + internalMicros);

@@ -19,16 +19,15 @@ ConcurrentDictionary<TSTree*> g_trees;
 ConcurrentDictionary<GapBuffer*> g_buffers;
 ConcurrentDictionary<Module*> g_modules;
 ConcurrentDictionary<FileScope*> g_fileScopes;
-std::vector<const FileScope*> g_fileScopeByIndex;
+ConcurrentVector<const FileScope*> g_fileScopeByIndex;
 ConcurrentDictionary<std::string> g_filePaths;
-std::mutex hope;
 
 std::atomic<bool> g_registered;
 TSLanguage* g_jaiLang;
 Constants g_constants;
 
 static char names[1000];
-export long long UpdateTree(uint64_t hashValue);
+export_jai_lsp long long UpdateTree(uint64_t hashValue);
 
 
 static void SetupBuiltInFunctions()
@@ -40,7 +39,7 @@ static void SetupBuiltInFunctions()
 
 }
 
-export int Init()
+export_jai_lsp int Init()
 {
 	g_jaiLang = tree_sitter_jai();
 
@@ -218,7 +217,7 @@ TokenType GetTokenTypeFromFlags(DeclarationFlags flags)
 }
 
 
-export const char* GetSyntaxNice(Hash document)
+export_jai_lsp const char* GetSyntaxNice(Hash document)
 {
 	auto tree = g_trees.Read(document).value();
 	auto root = ts_tree_root_node(tree);
@@ -228,7 +227,7 @@ export const char* GetSyntaxNice(Hash document)
 
 
 
-export const char* GetSyntax(const Hash& document)
+export_jai_lsp const char* GetSyntax(const Hash& document)
 {
 	auto tree = g_trees.Read(document).value();
 	auto root = ts_tree_root_node(tree);
@@ -237,7 +236,7 @@ export const char* GetSyntax(const Hash& document)
 }
 
 
-export GapBuffer* GetGapBuffer(Hash document)
+export_jai_lsp GapBuffer* GetGapBuffer(Hash document)
 {
 	return g_buffers.Read(document).value();
 }
@@ -245,7 +244,7 @@ export GapBuffer* GetGapBuffer(Hash document)
 
 static std::vector<TSInputEdit> s_edits;
 
-export long long EditTree(uint64_t hashValue, const char* change, int startLine, int startCol, int endLine, int endCol, int contentLength, int rangeLength)
+export_jai_lsp long long EditTree(uint64_t hashValue, const char* change, int startLine, int startCol, int endLine, int endCol, int contentLength, int rangeLength)
 {
 	auto timer = Timer("");
 	auto documentHash = Hash{ .value = hashValue };
@@ -263,14 +262,8 @@ export long long EditTree(uint64_t hashValue, const char* change, int startLine,
 	return timer.GetMicroseconds();
 }
 
-void HandleLoad(Hash documentHash)
+bool HandleLoad(Hash documentHash)
 {
-	if (auto file = g_fileScopes.Read(documentHash))
-	{
-		if (!(*file)->dirty)
-			return;
-	}
-
 	auto path = g_filePaths.Read(documentHash).value();
 
 	std::ifstream t(path);
@@ -282,6 +275,8 @@ void HandleLoad(Hash documentHash)
 
 	CreateTree(path.c_str(), buffer.c_str(), (uint32_t)buffer.length());
 
+
+	return true;
 	/*
 	// if this has loads handle them too
 	auto fileScope = g_fileScopes.Read(documentHash).value();
@@ -319,15 +314,20 @@ void IncrementalUpdate(TSTree* oldTree, TSTree* newTree)
 
 
 
-export long long CreateTree(const char* documentPath, const char* code, int length)
+export_jai_lsp long long CreateTree(const char* documentPath, const char* code, int length)
 {
-	//while (!g_registered);
 
 	auto timer = Timer("");
 
 	auto documentHash = StringHash(documentPath);
-	g_filePaths.Write(documentHash, documentPath);
 
+	if (auto fileScope = g_fileScopes.Read(documentHash))
+	{
+		if (!fileScope.value()->dirty)
+			return 0;
+	}
+
+	g_filePaths.Write(documentHash, documentPath);
 	GapBuffer* buffer;
 	if (auto bufferOpt = g_buffers.Read(documentHash))
 	{
@@ -368,11 +368,8 @@ export long long CreateTree(const char* documentPath, const char* code, int leng
 		auto scope = new FileScope();
 		scope->documentHash = documentHash;
 
-		// this is still not super thread safe because there's no lock around the people who are reading this array.
-		hope.lock(); // hope this fixes it!
 		scope->fileIndex = (uint16_t)g_fileScopeByIndex.size();
-		g_fileScopeByIndex.push_back(scope);
-		hope.unlock();
+		g_fileScopeByIndex.Append(scope);
 
 		g_fileScopes.Write(documentHash, scope);
 		scope->Build();
@@ -462,7 +459,7 @@ void CheckSubtrees(TSNode oldRoot, TSNode newRoot)
 
 
 // applies edits!
-export long long UpdateTree(uint64_t hashValue)
+export_jai_lsp long long UpdateTree(uint64_t hashValue)
 {
 	auto timer = Timer("");
 	auto documentHash = Hash{ .value = hashValue };
@@ -523,11 +520,12 @@ export long long UpdateTree(uint64_t hashValue)
 }
 
 
-export long long GetTokens(uint64_t hashValue, SemanticToken** outTokens, int* count)
+export_jai_lsp long long GetTokens(uint64_t hashValue, SemanticToken** outTokens, int* count)
 {
 	auto t = Timer("");
 	auto documentHash = Hash{ .value = hashValue };
 	auto fileScope = g_fileScopes.Read(documentHash).value();
+	fileScope->DoTokens2();
 	*outTokens = fileScope->tokens.data();
 	*count = (int)fileScope->tokens.size();
 

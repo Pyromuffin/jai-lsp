@@ -9,7 +9,7 @@ enum InvocationType
 };
 
 
-export const char* GetCompletionItems(uint64_t hashValue, int row, int col, InvocationType invocation)
+export_jai_lsp const char* GetCompletionItems(uint64_t hashValue, int row, int col, InvocationType invocation)
 {
 	auto documentHash = Hash{ .value = hashValue };
 
@@ -98,11 +98,11 @@ export const char* GetCompletionItems(uint64_t hashValue, int row, int col, Invo
 	{
 		if (auto type = GetType(decl->type))
 		{
-			auto memberScope = &g_fileScopeByIndex[decl->type.fileIndex]->scopeKings[type->members.index];
+			auto memberScope = &g_fileScopeByIndex.Read(decl->type.fileIndex)->scopeKings[type->members.index];
 			if (memberScope == nullptr)
 				return nullptr;
 	
-			auto bufferForType = g_fileScopeByIndex[decl->type.fileIndex]->buffer;
+			auto bufferForType = g_fileScopeByIndex.Read(decl->type.fileIndex)->buffer;
 			memberScope->AppendMembers(str, bufferForType);
 
 			return str.c_str();

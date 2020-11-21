@@ -15,7 +15,7 @@ const TypeKing* GetType(TypeHandle handle)
 		return nullptr;
 
 
-	return &g_fileScopeByIndex[handle.fileIndex]->types[handle.index];
+	return &g_fileScopeByIndex.Read(handle.fileIndex)->types[handle.index];
 }
 
 std::optional<ScopeDeclaration> GetDeclarationForNodeFromScope(TSNode node, FileScope* fileScope, const GapBuffer* buffer, Scope* scope, TSNode parent)
@@ -111,7 +111,7 @@ std::optional<ScopeDeclaration> EvaluateMemberAccess(TSNode node, FileScope* fil
 
 	if (typeKing)
 	{
-		auto members = &g_fileScopeByIndex[lhsType->type.fileIndex]->scopeKings[typeKing->members.index];
+		auto members = &g_fileScopeByIndex.Read(lhsType->type.fileIndex)->scopeKings[typeKing->members.index];
 
 		if (auto rhsDecl = members->TryGet(rhsHash))
 		{
@@ -214,7 +214,7 @@ const TypeKing* GetTypeForNode(TSNode node, FileScope* fileScope, GapBuffer* buf
 }
 
 
-export const char* GetLine(uint64_t hashValue, int row)
+export_jai_lsp const char* GetLine(uint64_t hashValue, int row)
 {
 	thread_local std::string s;
 	s.clear();
@@ -229,7 +229,7 @@ export const char* GetLine(uint64_t hashValue, int row)
 
 
 
-export void GetSignature(uint64_t hashValue, int row, int col, const char*** outSignature, int* outParameterCount, int* outActiveParameter, int* errorCount, Range** outErrors)
+export_jai_lsp void GetSignature(uint64_t hashValue, int row, int col, const char*** outSignature, int* outParameterCount, int* outActiveParameter, int* errorCount, Range** outErrors)
 {
 	thread_local std::vector<const char*> strings;
 	strings.clear();
@@ -332,7 +332,7 @@ export void GetSignature(uint64_t hashValue, int row, int col, const char*** out
 }
 
 
-export const char* Hover(uint64_t hashValue, int row, int col)
+export_jai_lsp const char* Hover(uint64_t hashValue, int row, int col)
 {
 	auto documentName = Hash{ .value = hashValue };
 
@@ -396,7 +396,7 @@ std::optional<ScopeDeclaration> EvaluateMemberAccessWithStack(TSNode node, FileS
 
 	if (typeKing)
 	{
-		auto members = &g_fileScopeByIndex[lhsType->type.fileIndex]->scopeKings[typeKing->members.index];
+		auto members = &g_fileScopeByIndex.Read(lhsType->type.fileIndex)->scopeKings[typeKing->members.index];
 
 		if (auto rhsDecl = members->TryGet(rhsHash))
 		{

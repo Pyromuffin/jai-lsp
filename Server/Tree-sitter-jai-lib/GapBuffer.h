@@ -4,26 +4,7 @@
 #include <tree_sitter/api.h>
 #include <string_view>
 
-
-struct Hash
-{
-    uint64_t value;
-    bool operator==(Hash const& rOther) const { return value == rOther.value; }
-#if _DEBUG
-    std::string debug_name;
-#endif
-};
-
-
-namespace std {
-    template <> struct hash<Hash>
-    {
-        inline size_t operator()(const Hash& h) const
-        {
-            return h.value;
-        }
-    };
-}
+#include "Hash.h"
 
 
 
