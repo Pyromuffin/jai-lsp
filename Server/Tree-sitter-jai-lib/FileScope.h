@@ -15,6 +15,7 @@ struct FileScope
 {
 	Hash documentHash;
 	uint16_t fileIndex;
+	TSTree* currentTree;
 
 	std::vector<Hash> imports;
 	std::vector<Hash> loads;
@@ -47,7 +48,15 @@ struct FileScope
 
 	std::vector<std::future<bool>> loadFutures;
 	std::vector<std::pair<ScopeHandle, TypeHandle>> usings;
-	std::atomic<bool> dirty = true;
+
+	enum class Status
+	{
+		dirty,
+		scopesBuilt,
+		checked,
+	};
+
+	std::atomic<Status> status = Status::dirty;
 
 	static constexpr bool INCREMENTAL_ANALYSIS = false;
 
@@ -64,7 +73,6 @@ struct FileScope
 		scopePresentBitmap[0].clear();
 		scopePresentBitmap[1].clear();
 		offsetToHandle.Clear();
-		//declarationsFound = false;
 	}
 
 
@@ -72,8 +80,11 @@ struct FileScope
 	// i realize now that imports CAN be exported and we probably need to account for this.
 	// this is evidenced by the fact that sometimes imports are declared in file scope, presumably so they don't leak out to the module.
 
+	std::optional<ScopeDeclaration> TryGet(Hash identifierHash);
 	std::optional<ScopeDeclaration> SearchExports(Hash identifierHash);
+	int SearchAndGetExport(Hash identifierHash, FileScope** outFile, Scope** declScope);
 	std::optional<ScopeDeclaration> SearchModules(Hash identifierHash);
+	int SearchAndGetModule(Hash identifierHash, FileScope** outFile, Scope** declScope);
 	std::optional<ScopeDeclaration> Search(Hash identifierHash);
 
 	Scope* GetScope(ScopeHandle handle)
@@ -211,7 +222,7 @@ struct FileScope
 
 
 
-	ScopeHandle AllocateScope(TSNode node, ScopeHandle parent)
+	ScopeHandle AllocateScope(TSNode node, ScopeHandle parent, bool imperative)
 	{
 		if (scopeKingFreeList.size() > 0)
 		{
@@ -220,6 +231,8 @@ struct FileScope
 			_nodeToScopes[node.id] = back;
 			GetScope(back)->Clear();
 			GetScope(back)->parent = parent;
+			GetScope(back)->imperative = imperative;
+			offsetToHandle.Add(node.context[0], back);
 
 			return back;
 		}
@@ -234,8 +247,9 @@ struct FileScope
 
 		auto handle = ScopeHandle{ .index = static_cast<uint16_t>(scopeKings.size() - 1) };
 		GetScope(handle)->parent = parent;
+		GetScope(handle)->imperative = imperative;
 		_nodeToScopes[node.id] = handle;
-
+		offsetToHandle.Add(node.context[0], handle);
 		return handle;
 	}
 
@@ -256,27 +270,23 @@ struct FileScope
 		return &g_fileScopeByIndex.Read(handle.fileIndex)->types[handle.index];
 	}
 
-	std::optional<ScopeDeclaration> TryGet(Hash hash) const
-	{
-		return scopeKings[file.index].TryGet(hash);
-	}
-
 
 	void HandleMemberReference(TSNode rhsNode, ScopeStack& stack, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex);
 	void HandleVariableReference(TSNode node, ScopeStack& stack, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex);
-	void HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope, std::vector<TSNode>& structs, bool exporting);
+	void HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope, std::vector<TSNode>& structs, bool exporting, bool usingFlag = false);
 	void HandleUsingStatement(TSNode node, ScopeHandle scope, std::vector<TSNode>& structs, bool& exporting);
 	void FindDeclarations(TSNode scopeNode, ScopeHandle scope, ScopeStack& stack, bool& exporting, bool rebuild = false);
 	void HandleFunctionDefnitionParameters(TSNode node, ScopeHandle currentScope, Cursor& cursor);
 	TypeHandle HandleFuncDefinitionNode(TSNode node, ScopeHandle currentScope, std::vector<TSNode>& structs, DeclarationFlags& flags);
 	void CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& exporting);
+	void CheckDecls(std::vector<int>& declIndices, Scope* scope);
 	void DoTypeCheckingAndInference(TSTree* tree);
 	void WaitForDependencies();
 	void Build();
 	void DoTokens2();
 	void DoTokens(TSNode root, TSInputEdit* edits, int editCount);
 	const std::optional<TypeHandle> EvaluateNodeExpressionType(TSNode node, const GapBuffer* buffer, ScopeHandle current, ScopeStack& stack);
-	const std::optional<TypeHandle> EvaluateNodeExpressionType(TSNode node, const GapBuffer* buffer, Scope* scope);
+	const std::optional<TypeHandle> EvaluateNodeExpressionType(TSNode node, Scope* scope);
 	void RebuildScope(TSNode newScopeNode, TSInputEdit* edits, int editCount, TSNode root);
 
 

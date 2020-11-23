@@ -8,8 +8,6 @@
 #include "Hash.h"
 #include "GapBuffer.h"
 
-#define SMALL true
-
 
 enum DeclarationFlags : uint8_t
 {
@@ -20,6 +18,7 @@ enum DeclarationFlags : uint8_t
 	Enum = 1 << 3,
 	Function = 1 << 4,
 	BuiltIn = 1 << 5,
+	Using = 1 << 6,
 	Evaluated = 1 << 7,
 };
 
@@ -89,29 +88,52 @@ public:
 };
 
 
-struct alignas(64) Scope
+
+
+
+
+
+class Scopemap
 {
-	static constexpr int small_size = 8;
+	struct kvp
+	{
+		Hash key;
+		ScopeDeclaration value;
+	};
+
+	kvp* map = nullptr;
 
 public:
-#if SMALL
-	Hash small_hashes[small_size];
-	ScopeDeclaration small_declarations[small_size];
-#endif
-	std::unordered_map<Hash, ScopeDeclaration> declarations;
-	int size;
+	void Add(Hash key, ScopeDeclaration value);
+	int GetIndex(Hash key);
+	void Update(size_t index, ScopeDeclaration value);
+	ScopeDeclaration Get(Hash key);
+	size_t Size() const;
+	bool Remove(Hash key);
+	bool Contains(Hash key);
+	void Clear();
+	kvp* Data();
+	ScopeDeclaration operator[](size_t) const;
+};
 
+
+
+struct Scope
+{
+	Scopemap declarations;
 	TypeHandle associatedType = TypeHandle::Null();
 	bool imperative;
 	ScopeHandle parent;
 
 	void Clear();
-	std::optional<ScopeDeclaration> TryGet(const Hash hash) const;
-
+	std::optional<ScopeDeclaration> TryGet(const Hash hash);
 	void Add(const Hash hash, const ScopeDeclaration decl);
-	void AppendMembers(std::string& str, const GapBuffer* buffer, uint32_t upTo = UINT_MAX) const;
+	void AppendMembers(std::string& str, const GapBuffer* buffer, uint32_t upTo = UINT_MAX);
 	void AppendExportedMembers(std::string& str, const GapBuffer* buffer);
-	void UpdateType(const Hash hash, const TypeHandle type);
-	void InjectMembersTo(Scope* otherScope);
-
+	void UpdateDeclaration(const size_t index, const ScopeDeclaration type);
+	void InjectMembersTo(Scope* otherScope, uint32_t atPosition);
+	ScopeDeclaration* GetDeclFromIndex(int index);
+	int GetIndex(const Hash hash);
 };
+
+constexpr auto scopeSize = sizeof(Scope);

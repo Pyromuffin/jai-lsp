@@ -3,89 +3,43 @@
 
 void Scope::Clear()
 {
-	size = 0;
-	declarations.clear();
+	declarations.Clear();
 }
 
-std::optional<ScopeDeclaration> Scope::TryGet(const Hash hash) const
+std::optional<ScopeDeclaration> Scope::TryGet(const Hash hash)
 {
-#if SMALL
-	if (size <= small_size)
+	auto index = declarations.GetIndex(hash);
+
+	if (index >= 0)
 	{
-		for (int i = 0; i < size; i++)
-		{
-			if (small_hashes[i] == hash)
-				return small_declarations[i];
-		}
-
-		return std::nullopt;
+		return declarations[index];
 	}
-#endif
 
-	auto it = declarations.find(hash);
-	if (it == declarations.end())
-		return std::nullopt;
-
-	return std::optional<ScopeDeclaration>(it->second);
+	return std::nullopt;
 }
+
 
 void Scope::Add(const Hash hash, const ScopeDeclaration decl)
 {
-#if SMALL
-	if (size < small_size)
-	{
-		small_hashes[size] = hash;
-		small_declarations[size] = decl;
-		size++;
-
-		return;
-	}
-	if (size == small_size)
-	{
-		for (int i = 0; i < small_size; i++)
-		{
-			auto small_hash = small_hashes[i];
-			auto small_decl = small_declarations[i];
-			declarations.insert({ small_hash, small_decl });
-		}
-	}
-#endif
-
-	declarations.insert({ hash, decl });
-	size++;
+	declarations.Add(hash, decl);
 }
 
-void Scope::AppendMembers(std::string& str, const GapBuffer* buffer, uint32_t upTo) const
+void Scope::AppendMembers(std::string& str, const GapBuffer* buffer, uint32_t upTo)
 {
-#if SMALL
-	if (size <= small_size)
+	auto size = declarations.Size();
+	auto data = declarations.Data();
+
+	for (int i = 0; i < size; i++)
 	{
-		for (int i = 0; i < size; i++)
-		{
-			auto decl = small_declarations[i];
-			if (imperative && (int)decl.startByte > upTo)
-				continue;
-
-			for (int i = 0; i < decl.GetLength(); i++)
-				str.push_back(buffer->GetChar(decl.startByte + i));
-
-			str.push_back(',');
-		}
-
-		return;
-	}
-#endif
-
-	for (auto& kvp : declarations)
-	{
-		if (kvp.second.flags & DeclarationFlags::BuiltIn)
+		auto& decl = data[i].value;
+		if (decl.flags & DeclarationFlags::BuiltIn)
 			continue;
 
-		if (imperative && (int)kvp.second.startByte > upTo)
+		if (imperative && (int)decl.startByte > upTo)
 			continue;
 
-		for (int i = 0; i < kvp.second.GetLength(); i++)
-			str.push_back(buffer->GetChar(kvp.second.startByte + i));
+		for (int i = 0; i < decl.GetLength(); i++)
+			str.push_back(buffer->GetChar(decl.startByte + i));
 
 		str.push_back(',');
 	}
@@ -93,74 +47,49 @@ void Scope::AppendMembers(std::string& str, const GapBuffer* buffer, uint32_t up
 
 void Scope::AppendExportedMembers(std::string& str, const GapBuffer* buffer)
 {
-#if SMALL
-	if (size <= small_size)
-	{
-		for (int i = 0; i < size; i++)
-		{
-			auto decl = small_declarations[i];
-			if (decl.flags & DeclarationFlags::Exported)
-			{
-				for (int i = 0; i < decl.GetLength(); i++)
-					str.push_back(buffer->GetChar(decl.startByte + i));
+	auto size = declarations.Size();
+	auto data = declarations.Data();
 
-				str.push_back(',');
-			}
-		}
-
-		return;
-	}
-#endif
-	for (auto& kvp : declarations)
+	for (int i = 0; i < size; i++)
 	{
-		if (kvp.second.flags & DeclarationFlags::Exported)
+		auto& decl = data[i].value;
+		if (decl.flags & DeclarationFlags::Exported)
 		{
-			for (int i = 0; i < kvp.second.GetLength(); i++)
-				str.push_back(buffer->GetChar(kvp.second.startByte + i));
+			for (int i = 0; i < decl.GetLength(); i++)
+				str.push_back(buffer->GetChar(decl.startByte + i));
 
 			str.push_back(',');
 		}
 	}
 }
 
-void Scope::UpdateType(const Hash hash, const TypeHandle type)
+void Scope::UpdateDeclaration(const size_t index, const ScopeDeclaration decl)
 {
-#if SMALL
-	if (size <= small_size)
-	{
-		for (int i = 0; i < size; i++)
-		{
-			if (small_hashes[i] == hash)
-			{
-				small_declarations[i].type = type;
-				return;
-			}
-		}
-	}
-#endif
-
-	declarations[hash].type = type;
+	declarations.Update(index, decl);
 }
 
-void Scope::InjectMembersTo(Scope* otherScope)
+void Scope::InjectMembersTo(Scope* otherScope, uint32_t atPosition)
 {
-#if SMALL
-	if (size <= small_size)
-	{
-		for (int i = 0; i < size; i++)
-		{
-			auto decl = small_declarations[i];
-			auto hash = small_hashes[i];
-			otherScope->Add(hash, decl);
-		}
+	auto size = declarations.Size();
+	auto data = declarations.Data();
 
-		return;
-	}
-#endif
-	for (auto& kvp : declarations)
+	for (int i = 0; i < size; i++)
 	{
-		otherScope->Add(kvp.first, kvp.second);
+		auto decl = data[i].value;
+		//decl.startByte = atPosition;
+		otherScope->Add(data[i].key, decl);
 	}
+}
+
+ScopeDeclaration* Scope::GetDeclFromIndex(int index)
+{
+	auto data = declarations.Data();
+	return &data[index].value;
+}
+
+int Scope::GetIndex(const Hash hash)
+{
+	return declarations.GetIndex(hash);
 }
 
 uint16_t ScopeDeclaration::GetLength() const

@@ -53,3 +53,84 @@ ScopeHandle Hashmap::operator[](size_t index)
 {
 	return map[index].value;
 }
+
+
+
+
+
+void Scopemap::Add(Hash key, ScopeDeclaration value)
+{
+	/*
+#if _DEBUG
+	for (int i = 0; i < Size(); i++)
+	{
+		assert(map[i].value.index != value.index);
+	}
+#endif
+	*/
+	idput(map, key, value);
+}
+
+int Scopemap::GetIndex(Hash key)
+{
+	ptrdiff_t temp;
+	return (int)idgeti_ts(map, key, temp);
+}
+
+ScopeDeclaration Scopemap::Get(Hash key)
+{
+	assert(Contains(key));
+	ptrdiff_t temp;
+	return idget_ts(map, key, temp);
+}
+
+size_t Scopemap::Size() const 
+{
+	return idlenu(map);
+}
+
+bool Scopemap::Remove(Hash key)
+{
+	return iddel(map, key);
+}
+
+bool Scopemap::Contains(Hash key)
+{
+	ptrdiff_t temp;
+	return idgeti_ts(map, key, temp) >= 0;
+}
+
+void Scopemap::Clear()
+{
+	idfree(map);
+}
+
+Scopemap::kvp* Scopemap::Data()
+{
+	return map;
+}
+
+ScopeDeclaration Scopemap::operator[](size_t index) const
+{
+	return map[index].value;
+}
+
+void Scopemap::Update(size_t index, ScopeDeclaration value)
+{
+	map[index].value = value;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

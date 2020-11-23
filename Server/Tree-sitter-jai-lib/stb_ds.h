@@ -428,6 +428,24 @@ CREDITS
 #define hmdefault   stbds_hmdefault
 #define hmdefaults  stbds_hmdefaults
 
+
+#define idput       stbds_idput
+#define idputs      stbds_idputs
+#define idget       stbds_idget
+#define idget_ts    stbds_idget_ts
+#define idgets      stbds_idgets
+#define idgetp      stbds_idgetp
+#define idgetp_ts   stbds_idgetp_ts
+#define idgetp_null stbds_idgetp_null
+#define idgeti      stbds_idgeti
+#define idgeti_ts   stbds_idgeti_ts
+#define iddel       stbds_iddel
+#define idlen       stbds_idlen
+#define idlenu      stbds_idlenu
+#define idfree      stbds_idfree
+#define iddefault   stbds_iddefault
+#define iddefaults  stbds_iddefaults
+
 #define shput       stbds_shput
 #define shputi      stbds_shputi
 #define shputs      stbds_shputs
@@ -569,8 +587,7 @@ extern void * stbds_shmode_func(size_t elemsize, int mode);
       stbds_temp((t)-1))
 
 #define stbds_hmgeti_ts(t,k,temp) \
-    ((t) = stbds_hmget_key_ts_wrapper((t), sizeof *(t), (void*) STBDS_ADDRESSOF((t)->key, (k)), sizeof (t)->key, &(temp), STBDS_HM_BINARY), \
-      (temp))
+    ( (t) = stbds_hmget_key_ts_wrapper( (t), sizeof *(t), (void*) STBDS_ADDRESSOF((t)->key, (k)), sizeof (t)->key, &(temp), STBDS_HM_BINARY), (temp) )
 
 #define stbds_hmgetp(t, k) \
     ((void) stbds_hmgeti(t,k), &(t)[stbds_temp((t)-1)])
@@ -596,6 +613,74 @@ extern void * stbds_shmode_func(size_t elemsize, int mode);
 #define stbds_hmlen(t)        ((t) ? (ptrdiff_t) stbds_header((t)-1)->length-1 : 0)
 #define stbds_hmlenu(t)       ((t) ?             stbds_header((t)-1)->length-1 : 0)
 #define stbds_hmgetp_null(t,k)  (stbds_hmgeti(t,k) == -1 ? NULL : &(t)[stbds_temp(t)-1])
+
+
+
+
+
+
+
+#define stbds_idput(t, k, v) \
+    ((t) = stbds_hmput_key_wrapper((t), sizeof *(t), (void*) STBDS_ADDRESSOF((t)->key, (k)), sizeof (t)->key, STBDS_HM_IDENTITY),   \
+     (t)[stbds_temp((t)-1)].key = (k),    \
+     (t)[stbds_temp((t)-1)].value = (v))
+
+#define stbds_idputs(t, s) \
+    ((t) = stbds_hmput_key_wrapper((t), sizeof *(t), &(s).key, sizeof (s).key, STBDS_HM_IDENTITY), \
+     (t)[stbds_temp((t)-1)] = (s))
+
+#define stbds_idgeti(t,k) \
+    ((t) = stbds_hmget_key_wrapper((t), sizeof *(t), (void*) STBDS_ADDRESSOF((t)->key, (k)), sizeof (t)->key, STBDS_HM_IDENTITY), \
+      stbds_temp((t)-1))
+
+#define stbds_idgeti_ts(t,k,temp) \
+    ((t) = stbds_hmget_key_ts_wrapper((t), sizeof *(t), (void*) STBDS_ADDRESSOF((t)->key, (k)), sizeof (t)->key, &(temp), STBDS_HM_IDENTITY), \
+      (temp))
+
+#define stbds_idgetp(t, k) \
+    ((void) stbds_idgeti(t,k), &(t)[stbds_temp((t)-1)])
+
+#define stbds_idgetp_ts(t, k, temp) \
+    ((void) stbds_idgeti_ts(t,k,temp), &(t)[temp])
+
+#define stbds_iddel(t,k) \
+    (((t) = stbds_hmdel_key_wrapper((t),sizeof *(t), (void*) STBDS_ADDRESSOF((t)->key, (k)), sizeof (t)->key, STBDS_OFFSETOF((t),key), STBDS_HM_IDENTITY)),(t)?stbds_temp((t)-1):0)
+
+#define stbds_iddefault(t, v) \
+    ((t) = stbds_hmput_default_wrapper((t), sizeof *(t)), (t)[-1].value = (v))
+
+#define stbds_iddefaults(t, s) \
+    ((t) = stbds_hmput_default_wrapper((t), sizeof *(t)), (t)[-1] = (s))
+
+#define stbds_idfree(p)        \
+    ((void) ((p) != NULL ? stbds_hmfree_func((p)-1,sizeof*(p)),0 : 0),(p)=NULL)
+
+#define stbds_idgets(t, k)    (*stbds_idgetp(t,k))
+#define stbds_idget(t, k)     (stbds_idgetp(t,k)->value)
+#define stbds_idget_ts(t, k, temp)  (stbds_idgetp_ts(t,k,temp)->value)
+#define stbds_idlen(t)        ((t) ? (ptrdiff_t) stbds_header((t)-1)->length-1 : 0)
+#define stbds_idlenu(t)       ((t) ?             stbds_header((t)-1)->length-1 : 0)
+#define stbds_idgetp_null(t,k)  (stbds_idgeti(t,k) == -1 ? NULL : &(t)[stbds_temp(t)-1])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #define stbds_shput(t, k, v) \
     ((t) = stbds_hmput_key_wrapper((t), sizeof *(t), (void*) (k), sizeof (t)->key, STBDS_HM_STRING),   \
@@ -673,6 +758,7 @@ struct stbds_string_arena
 
 #define STBDS_HM_BINARY         0
 #define STBDS_HM_STRING         1
+#define STBDS_HM_IDENTITY       -1
 
 enum
 {
@@ -1191,6 +1277,8 @@ static int stbds_is_key_equal(void *a, size_t elemsize, void *key, size_t keysiz
 {
   if (mode >= STBDS_HM_STRING)
     return 0==strcmp((char *) key, * (char **) ((char *) a + elemsize*i + keyoffset));
+  else if (mode == STBDS_HM_IDENTITY)
+      return 1;
   else
     return 0==memcmp(key, (char *) a + elemsize*i + keyoffset, keysize);
 }
@@ -1220,7 +1308,7 @@ static ptrdiff_t stbds_hm_find_slot(void *a, size_t elemsize, void *key, size_t 
 {
   void *raw_a = STBDS_HASH_TO_ARR(a,elemsize);
   stbds_hash_index *table = stbds_hash_table(raw_a);
-  size_t hash = mode >= STBDS_HM_STRING ? stbds_hash_string((char*)key,table->seed) : stbds_hash_bytes(key, keysize,table->seed);
+  size_t hash = mode == STBDS_HM_IDENTITY ? (*(size_t*)key) : mode >= STBDS_HM_STRING ? stbds_hash_string((char*)key,table->seed) : stbds_hash_bytes(key, keysize,table->seed);
   size_t step = STBDS_BUCKET_LENGTH;
   size_t limit,i;
   size_t pos;
@@ -1357,7 +1445,7 @@ void *stbds_hmput_key(void *a, size_t elemsize, void *key, size_t keysize, int m
 
   // we iterate hash table explicitly because we want to track if we saw a tombstone
   {
-    size_t hash = mode >= STBDS_HM_STRING ? stbds_hash_string((char*)key,table->seed) : stbds_hash_bytes(key, keysize,table->seed);
+    size_t hash = mode == STBDS_HM_IDENTITY ? (*(size_t*)key) : mode >= STBDS_HM_STRING ? stbds_hash_string((char*)key,table->seed) : stbds_hash_bytes(key, keysize,table->seed);
     size_t step = STBDS_BUCKET_LENGTH;
     size_t limit,i;
     size_t pos;

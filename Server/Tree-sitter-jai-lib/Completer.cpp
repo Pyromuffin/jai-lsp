@@ -1,6 +1,9 @@
 #include "TreeSitterJai.h"
 #include "FileScope.h"
 
+TSNode ConstructRhsFromDecl(ScopeDeclaration decl, TSTree* tree);
+
+
 enum InvocationType
 {
 	Invoked = 1,
@@ -21,6 +24,16 @@ export_jai_lsp const char* GetCompletionItems(uint64_t hashValue, int row, int c
 	auto buffer = g_buffers.Read(documentHash).value();
 	auto fileScope = g_fileScopes.Read(documentHash).value();
 
+	if (fileScope->status != FileScope::Status::checked)
+	{
+		fileScope->WaitForDependencies();
+		fileScope->DoTypeCheckingAndInference(tree);
+
+		fileScope->status = FileScope::Status::checked;
+	}
+
+
+
 	
 	auto point = TSPoint{ static_cast<uint32_t>(row), static_cast<uint32_t>(col) };
 	if (invocation == TriggerCharacter)
@@ -30,30 +43,39 @@ export_jai_lsp const char* GetCompletionItems(uint64_t hashValue, int row, int c
 
 	auto node = ts_node_named_descendant_for_point_range(root, point, point);
 	
+	/*
 	if (ts_node_has_error(node))
 	{
 		auto child = ts_node_named_child(node, 0);
 		if (!ts_node_is_null(child))
 			node = child;
 	}
+	*/
+
+	auto symbol = ts_node_symbol(node);
+	if (symbol == g_constants.imperativeScope)
+	{
+		auto parent = ts_node_parent(node);
+		auto parentSymbol = ts_node_symbol(parent);
+		if (parentSymbol == g_constants.funcDefinition)
+		{
+			node = parent;
+		}
+	}
+
 
 	if (fileScope->ContainsScope(node.id))
 	{
 		// we've invoked this on some empty space in a scope, so lets just print out whatever is in scope up to this point.
-		auto scope = fileScope->GetScopeFromNodeID(node.id);
-		fileScope->GetScope(scope)->AppendMembers(str, buffer);
-
-		TSNode scopeScopeParent;
-		ScopeHandle scopeScope;
-		auto found = GetScopeAndParentForNode(node, fileScope, &scopeScopeParent, &scopeScope);
-		while (found)
+		auto scopeHandle = fileScope->GetScopeFromNodeID(node.id);
+		auto scope = fileScope->GetScope(scopeHandle);
+		
+		while (scope)
 		{
-			fileScope->GetScope(scopeScope)->AppendMembers(str, buffer);
-			found = GetScopeAndParentForNode(scopeScopeParent, fileScope, &scopeScopeParent, &scopeScope);
+			scope->AppendMembers(str, buffer);
+			scope = fileScope->GetScope(scope->parent);
 		}
 
-		// and append whatever is in file scope for good measure:
-		fileScope->GetScope(fileScope->file)->AppendMembers(str, buffer);
 
 		// and append loads
 		for (auto load : fileScope->loads)

@@ -13,7 +13,7 @@ extern "C"
 {
     int Init();
 	const char* GetCompletionItems(const char* code, int row, int col);
-	long long GetTokens(Hash documentHash, SemanticToken** outTokens, int* count);
+	long long GetTokens(uint64_t documentHash, SemanticToken** outTokens, int* count);
 	const char* GetSyntax(const Hash& documentHash);
 	static void HandleVariableReference(TSNode& node, GapBuffer* buffer, std::vector<Scope*>& scopeKing, FileScope* fileScope, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex);
 	static void HandleUnresolvedReferences(std::vector<int>& unresolvedTokenIndex, std::vector<TSNode>& unresolvedEntry, GapBuffer* buffer, FileScope* fileScope);
@@ -21,6 +21,8 @@ extern "C"
 	long long EditTree(Hash documentHash, const char* change, int startLine, int startCol, int endLine, int endCol, int contentLength, int rangeLength);
 	long long UpdateTree(Hash documentHash);
 	long long CreateTreeFromPath(const char* document, const char* moduleName);
+	void AddModuleDirectory(const char* moduleDirectory);
+
 }
 
 const char* path = "C:\\Users\\pyrom\\Desktop\\jai\\how_to\\010_calling_procedures.jai";
@@ -116,7 +118,7 @@ void PrintTokens(Hash documentHash)
 	SemanticToken* tokens;
 	int count;
 
-	GetTokens(documentHash, &tokens, &count);
+	GetTokens(documentHash.value, &tokens, &count);
 	for (int i = 0; i < count; i++)
 	{
 		std::cout << (int)tokens[i].type << "\n";
@@ -188,6 +190,8 @@ void ParseModules(int tries)
 
 int main()
 {
+
+	auto debugFile = "C:\\Users\\pyrom\\Desktop\\jai\\modules\\Basic\\Print.jai";
 	/*
 	while (true)
 	{
@@ -206,8 +210,17 @@ int main()
 		"bob.legs = 5; \n"
 		;
 
+	auto modulePath = "C:\\Users\\pyrom\\Desktop\\jai\\modules";
 
-		CreateTree("zebra", code, strlen(code));
+
+	AddModuleDirectory(modulePath);
+	CreateTreeFromPath(debugFile, "zebra");
+	auto hash = StringHash (debugFile);
+	SemanticToken* tokens;
+	int count;
+	GetTokens(hash.value, &tokens, &count);
+
+	//	CreateTree("zebra", code, strlen(code));
 
 	//ParseModules(30);
 

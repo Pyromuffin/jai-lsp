@@ -4,6 +4,34 @@
 
 bool HandleLoad(Hash documentHash);
 
+
+TSNode ConstructRhsFromDecl(ScopeDeclaration decl, TSTree* tree)
+{
+	assert((decl.flags & DeclarationFlags::Evaluated) == 0);
+	TSNode node;
+	node.id = decl.id;
+	node.tree = tree;
+	node.context[0] = decl.startByte + decl.GetRHSOffset();
+	node.context[3] = 0;
+
+	return node;
+}
+
+
+std::optional<ScopeDeclaration> FileScope::TryGet(Hash identifierHash)
+{
+	if (auto decl = GetScope(file)->TryGet(identifierHash))
+	{
+		if (decl.value().flags & DeclarationFlags::Exported)
+		{
+			return decl;
+		}
+
+	}
+
+	return std::nullopt;
+}
+
 std::optional<ScopeDeclaration> FileScope::SearchExports(Hash identifierHash)
 {
 
@@ -28,6 +56,38 @@ std::optional<ScopeDeclaration> FileScope::SearchExports(Hash identifierHash)
 	}
 
 	return std::nullopt;
+}
+
+int FileScope::SearchAndGetExport(Hash identifierHash, FileScope** outFile, Scope** outDeclScope)
+{
+	auto declScope = GetScope(file);
+	auto declIndex = declScope->GetIndex(identifierHash);
+	if (declIndex >= 0)
+	{
+		auto data = declScope->declarations.Data();
+		auto decl = &data[declIndex].value;
+		if (decl->flags & DeclarationFlags::Exported)
+		{
+			*outDeclScope = declScope;
+			*outFile = this;
+			return declIndex;
+		}
+
+	}
+
+	for (auto loadHash : loads)
+	{
+		if (auto file = g_fileScopes.Read(loadHash))
+		{
+			auto declIndex = file.value()->SearchAndGetExport(identifierHash, outFile, outDeclScope);
+			if (declIndex >= 0)
+			{
+				return declIndex;
+			}
+		}
+	}
+
+	return -1;
 }
 
 std::optional<ScopeDeclaration> FileScope::SearchModules(Hash identifierHash)
@@ -55,6 +115,35 @@ std::optional<ScopeDeclaration> FileScope::SearchModules(Hash identifierHash)
 	}
 
 	return std::nullopt;
+}
+
+int FileScope::SearchAndGetModule(Hash identifierHash, FileScope** outFile, Scope** declScope)
+{
+	for (auto modHash : imports)
+	{
+		if (auto mod = g_modules.Read(modHash))
+		{
+			auto declIndex = mod.value()->SearchAndGetFile(identifierHash, outFile, declScope);
+			if (declIndex >= 0)
+			{
+				return declIndex;
+			}
+		}
+	}
+
+	for (auto loadHash : loads)
+	{
+		if (auto file = g_fileScopes.Read(loadHash))
+		{
+			auto declIndex = file.value()->SearchAndGetExport(identifierHash, outFile, declScope);
+			if (declIndex >= 0)
+			{
+				return declIndex;
+			}
+		}
+	}
+
+	return -1;
 }
 
 std::optional<ScopeDeclaration> FileScope::Search(Hash identifierHash)
@@ -121,8 +210,13 @@ void FileScope::HandleVariableReference(TSNode node, ScopeStack& stack, std::vec
 	{
 		int index = (int)stack.scopes.size() - sp - 1;
 		auto frame = stack.scopes[index];
-		if (auto decl = GetScope(frame)->TryGet(hash))
+		auto scope = GetScope(frame);
+		if (auto decl = scope->TryGet(hash))
 		{
+			// also we need to taken into account imperative scope order.
+			if (scope->imperative && decl->startByte > ts_node_start_byte(node))
+				continue;
+
 			token.type = GetTokenTypeFromFlags(decl->flags);
 			goto done;
 		}
@@ -142,6 +236,30 @@ void FileScope::HandleVariableReference(TSNode node, ScopeStack& stack, std::vec
 
 done:
 	tokens.push_back(token);
+}
+
+static ScopeDeclaration AddUsingToScope(TSNode node, const GapBuffer* buffer, Scope* scope, TypeHandle type, DeclarationFlags flags)
+{
+	ScopeDeclaration entry;
+	auto start = ts_node_start_byte(node);
+	entry.startByte = start;
+	entry.flags = flags;
+	auto end = ts_node_end_byte(node);
+	entry.SetLength(end - start);
+
+	if (flags & DeclarationFlags::Evaluated)
+	{
+		entry.type = type;
+	}
+	else
+	{
+		entry.SetRHSOffset(0);
+		entry.id = node.id;
+	}
+
+
+	scope->Add({ 0 }, entry);
+	return entry;
 }
 
 
@@ -170,7 +288,7 @@ static ScopeDeclaration AddEntryToScope(TSNode node, const GapBuffer* buffer, Sc
 }
 
 
-void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope, std::vector<TSNode>& structs, bool exporting)
+void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope, std::vector<TSNode>& structs, bool exporting, bool usingFlag)
 {
 	auto cursor = Cursor();
 	std::vector<TSNode> identifiers;
@@ -219,6 +337,11 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope,
 	auto expressionType = ts_node_symbol(node);
 	// make these symbols constant somehow to use a switch statement
 	DeclarationFlags flags = (DeclarationFlags)0;
+	if (usingFlag)
+	{
+		flags = flags | DeclarationFlags::Using;
+	}
+
 	TypeHandle handle = TypeHandle::Null();
 
 	if (exporting)
@@ -275,7 +398,7 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope,
 					handle = AllocateType();
 					auto king = &types[handle.index];
 					king->name = GetIdentifierFromBufferCopy(identifiers[0], buffer); //@todo this is probably not ideal, allocating a string for every type name every time.
-					king->members = AllocateScope(scopeNode, currentScope);
+					king->members = AllocateScope(scopeNode, currentScope, false);
 					GetScope(king->members)->associatedType = handle;
 					structs.push_back(scopeNode);
 				}
@@ -306,12 +429,13 @@ void FileScope::HandleUsingStatement(TSNode node, ScopeHandle scope, std::vector
 	auto child = ts_node_named_child(node, 0);
 	if (ts_node_symbol(child) == g_constants.namedDecl)
 	{
-		HandleNamedDecl(child, scope, structs, exporting);
+		HandleNamedDecl(child, scope, structs, exporting, true);
 	}
 	else
 	{
-		// do something here.
-		//unresolvedTypes.push_back(std::make_tuple(Hash{ 0 }, node));
+		//@todo if this is a type definition, then we need to handle that eventually
+
+		AddUsingToScope(child, buffer, GetScope(scope), TypeHandle::Null(), DeclarationFlags::Using);
 	}
 
 
@@ -374,7 +498,7 @@ void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope, ScopeStack
 		else if (type == g_constants.imperativeScope)
 		{
 			// naked scope
-			AllocateScope(node, scope);
+			AllocateScope(node, scope, true);
 			structs.push_back(node);
 		}
 
@@ -502,7 +626,7 @@ TypeHandle FileScope::HandleFuncDefinitionNode(TSNode node, ScopeHandle currentS
 
 	auto typeHandle = AllocateType();
 	auto king = &types[typeHandle.index];
-	auto scopeHandle = AllocateScope(node, currentScope);
+	auto scopeHandle = AllocateScope(node, currentScope, true);
 	GetScope(scopeHandle)->associatedType = typeHandle;
 	king->members = scopeHandle;
 	structs.push_back(node); // not the scope node! this is how we can know we're doing a function definition later.
@@ -535,7 +659,7 @@ std::optional<std::filesystem::path> ModuleFilePath(std::string name);
 
 void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& exporting)
 {
-	file = AllocateScope(node, {UINT16_MAX} );
+	file = AllocateScope(node, {UINT16_MAX}, false);
 	GetScope(file)->imperative = false;
 
 	for (int i = 0; i < builtins.size(); i++)
@@ -571,7 +695,7 @@ void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& export
 
 				if (auto mod = g_modules.Read(moduleNameHash))
 				{
-					if(mod.value()->moduleFile->dirty)
+					if(mod.value()->moduleFile->status == Status::dirty)
 						loadFutures.push_back( std::async(std::launch::async, HandleLoad, mod.value()->moduleFileHash));
 				}
 				else
@@ -617,7 +741,7 @@ void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& export
 		if (auto fileOpt = g_fileScopes.Read(documentHash))
 		{
 			auto file = fileOpt.value();
-			if (!file->dirty)
+			if (file->status != Status::dirty)
 				continue;
 		}
 
@@ -632,88 +756,90 @@ void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& export
 	ts_tree_cursor_delete(&cursor);
 }
 
+
+void FileScope::CheckDecls(std::vector<int>& declIndices, Scope* scope)
+{
+	bool resolvedAtLeastOne = true;
+
+	while (resolvedAtLeastOne && declIndices.size() > 0)
+	{
+		resolvedAtLeastOne = false;
+
+		for (int i = 0; i < declIndices.size(); i++)
+		{
+			auto decl = scope->GetDeclFromIndex(declIndices[i]);
+			auto node = ConstructRhsFromDecl(*decl, currentTree);
+			bool usingExpression = decl->GetRHSOffset() == 0;
+
+			if (auto typeHandle = EvaluateNodeExpressionType(node, scope))
+			{
+				decl->type = *typeHandle;
+				decl->flags = decl->flags | DeclarationFlags::Evaluated;
+
+				if (decl->flags & DeclarationFlags::Using)
+				{
+					// add members of type to scope.
+					auto memberFile = g_fileScopeByIndex.Read(typeHandle->fileIndex);
+					auto memberHandle = memberFile->types[typeHandle->index].members;
+					auto memberScope = &memberFile->scopeKings[memberHandle.index];
+					auto memberSize = memberScope->declarations.Size();
+					std::vector<int> memberIndices;
+
+					for (int i = 0; i < memberSize; i++)
+					{
+						auto decl = memberScope->GetDeclFromIndex(i);
+						if ((decl->flags & DeclarationFlags::Evaluated) == 0)
+						{
+							memberIndices.push_back(i);
+						}
+					}
+
+					// we probably need to make sure we don't have any circular dependencies in here.
+					memberFile->CheckDecls(memberIndices, memberScope);
+					memberScope->InjectMembersTo(scope, decl->startByte);
+
+					decl = scope->GetDeclFromIndex(declIndices[i]);
+					decl->flags = (DeclarationFlags)(decl->flags & (~DeclarationFlags::Using));
+					if (usingExpression)
+					{
+						decl->SetLength(0); // this is a hack so that this 'using' declaration doesn't show up in completions.
+					}
+				}
+
+				// erase swap back
+				declIndices[i] = declIndices.back();
+				declIndices.pop_back();
+				i--;
+
+				resolvedAtLeastOne = true;
+			}
+
+
+		}
+	}
+
+}
+
+
 void FileScope::DoTypeCheckingAndInference(TSTree* tree)
 {
+	std::vector<int> declarations;
 
 	// so i think that we should be able to do this in order of scopes.
 	for (auto& scope : scopeKings)
 	{
-		bool resolvedAtLeastOne = true;
-		
-
-		if (scope.size <= scope.small_size)
+		auto size = scope.declarations.Size();
+		for (int i = 0; i < size; i++)
 		{
-			int unresolvedCount = scope.size;
-			while (resolvedAtLeastOne && unresolvedCount > 0)
+			auto decl = scope.GetDeclFromIndex(i);
+			if ((decl->flags & DeclarationFlags::Evaluated) == 0)
 			{
-				resolvedAtLeastOne = false;
-				unresolvedCount = 0;
-
-				for (int i = 0; i < scope.size; i++)
-				{
-					auto& decl = scope.small_declarations[i];
-
-					if (decl.flags & DeclarationFlags::Evaluated)
-					{
-						continue;
-					}
-
-					TSNode node;
-					node.id = decl.id;
-					node.tree = tree;
-					node.context[0] = decl.startByte + decl.GetRHSOffset();
-					node.context[3] = 0;
-
-					if (auto typeHandle = EvaluateNodeExpressionType(node, buffer, &scope))
-					{
-						decl.flags = decl.flags | DeclarationFlags::Evaluated;
-						decl.type = *typeHandle;
-					
-						resolvedAtLeastOne = true;
-					}
-					else
-					{
-						unresolvedCount++;
-					}
-				}
+				declarations.push_back(i);
 			}
 		}
-		else
-		{
-			int unresolvedCount = scope.size;
-			while (resolvedAtLeastOne && unresolvedCount > 0)
-			{
-				resolvedAtLeastOne = false;
-				unresolvedCount = 0;
-				// iterate through hash table
-				for (auto& kvp : scope.declarations)
-				{
-					auto& decl = kvp.second;
-					if (decl.flags & DeclarationFlags::Evaluated)
-					{
-						continue;
-					}
 
-					TSNode node;
-					node.id = decl.id;
-					node.tree = tree;
-					node.context[0] = decl.startByte + decl.GetRHSOffset();
-					node.context[3] = 0;
-
-					if (auto typeHandle = EvaluateNodeExpressionType(node, buffer, &scope))
-					{
-						decl.flags = decl.flags | DeclarationFlags::Evaluated;
-						decl.type = *typeHandle;
-
-						resolvedAtLeastOne = true;
-					}
-					else
-					{
-						unresolvedCount++;
-					}
-				}
-			}
-		}
+		CheckDecls(declarations, &scope);
+		declarations.clear();
 	}
 
 /*
@@ -773,8 +899,8 @@ void FileScope::WaitForDependencies()
 	for (auto& future : loadFutures)
 	{
 		future.wait();
-		//auto result = future.get();
 	}
+
 
 	/*
 	for (auto& loadHash : loads)
@@ -818,7 +944,7 @@ void FileScope::WaitForDependencies()
 
 void FileScope::Build()
 {
-	if (!dirty)
+	if (status != Status::dirty)
 		return;
 
 	Clear();
@@ -827,6 +953,8 @@ void FileScope::Build()
 	auto tree = g_trees.Read(documentHash).value();
 	auto root = ts_tree_root_node(tree);
 
+	currentTree = tree;
+
 	ScopeStack stack;
 
 	bool exporting = true;
@@ -834,28 +962,20 @@ void FileScope::Build()
 
 	CreateTopLevelScope(root, stack, exporting);
 
-	dirty = false;
+	status = Status::scopesBuilt;
 }
 
 void FileScope::DoTokens2()
 {
-	auto tree = g_trees.Read(documentHash).value();
-	auto root = ts_tree_root_node(tree);
-
-	WaitForDependencies();
-
-	DoTypeCheckingAndInference(tree);
-
-	for (auto& use : usings)
+	if (status != Status::checked)
 	{
-		auto type = GetType(use.second);
-		auto memberScope = GetScope(type->members);
-		memberScope->InjectMembersTo(GetScope(use.first));
+		WaitForDependencies();
+		DoTypeCheckingAndInference(currentTree);
+
+		status = Status::checked;
 	}
-	usings.clear();
 
-
-
+	auto root = ts_tree_root_node(currentTree);
 	ScopeStack stack;
 	stack.scopes.push_back(file);
 	std::vector<TSNode> unresolvedEntry;
@@ -1129,7 +1249,7 @@ void FileScope::DoTokens(TSNode root, TSInputEdit* edits, int editCount)
 			if (!scopeHandle)
 			{
 				// naked scope
-				scopeHandle = AllocateScope(node, stack.scopes.back());
+				scopeHandle = AllocateScope(node, stack.scopes.back(), true);
 				FindDeclarations(node, *scopeHandle, stack, exporting);
 			}
 
@@ -1232,7 +1352,8 @@ const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode nod
 	return std::nullopt;
 }
 
-const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode node, const GapBuffer* buffer, Scope* scope)
+
+const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode node, Scope* scope)
 {
 	auto symbol = ts_node_symbol(node);
 	auto hash = GetIdentifierHash(node, buffer);
@@ -1243,14 +1364,33 @@ const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode nod
 
 		while (scope)
 		{
-			if (auto decl = scope->TryGet(hash))
+			auto declIndex = scope->GetIndex(hash);
+			if (declIndex >= 0)
 			{
+				auto decl = scope->GetDeclFromIndex(declIndex);
+				auto startByte = ts_node_start_byte(node);
+
+				if (scope->imperative && (decl->startByte > startByte))
+				{
+					scope = GetScope(scope->parent);
+					continue;
+				}
+
+
 				if (decl->flags & DeclarationFlags::Evaluated)
 				{
 					return decl->type;
 				}
 				else
 				{
+					auto node = ConstructRhsFromDecl(*decl, currentTree);
+					if (auto type = EvaluateNodeExpressionType(node, scope))
+					{
+						decl->type = *type;
+						decl->flags = decl->flags | DeclarationFlags::Evaluated;
+						return type;
+					}
+
 					return std::nullopt;
 				}
 			}
@@ -1258,15 +1398,27 @@ const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode nod
 			scope = GetScope(scope->parent);
 		}
 		
-
-		if (auto decl = SearchModules(hash))
+		FileScope* moduleFile;
+		Scope* declScope;
+		auto declIndex = SearchAndGetModule(hash, &moduleFile, &declScope);
+		if (declIndex >= 0)
 		{
+			auto decl = declScope->GetDeclFromIndex(declIndex);
 			if (decl->flags & DeclarationFlags::Evaluated)
 			{
 				return decl->type;
 			}
 			else
 			{
+				auto node = ConstructRhsFromDecl(*decl, moduleFile->currentTree);
+				if (auto type = moduleFile->EvaluateNodeExpressionType(node, declScope))
+				{
+					decl->type = *type;
+					decl->flags = decl->flags | DeclarationFlags::Evaluated;
+					return type;
+				}
+
+
 				return std::nullopt;
 			}
 		}

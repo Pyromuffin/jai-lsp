@@ -72,6 +72,8 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
+    <LibraryPath>C:\Users\pyrom\Documents\GitHub\jai-lsp\Server\jai-lsp-server-core\bin\x64\Debug\netcoreapp3.1;$(LibraryPath)</LibraryPath>
+    <OutDir>$(SolutionDir)jai-lsp-server-core\bin\$(Platform)\$(Configuration)\netcoreapp3.1\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>

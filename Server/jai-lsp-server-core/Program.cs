@@ -27,10 +27,6 @@ namespace jai_lsp
 
 #if DEBUG 
             System.Diagnostics.Debugger.Launch();
-            while (!System.Diagnostics.Debugger.IsAttached)
-            {
-                await Task.Delay(100);
-            }
 #endif
             TreeSitter.Init();
 

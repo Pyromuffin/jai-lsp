@@ -19,7 +19,7 @@ ConcurrentDictionary<TSTree*> g_trees;
 ConcurrentDictionary<GapBuffer*> g_buffers;
 ConcurrentDictionary<Module*> g_modules;
 ConcurrentDictionary<FileScope*> g_fileScopes;
-ConcurrentVector<const FileScope*> g_fileScopeByIndex;
+ConcurrentVector<FileScope*> g_fileScopeByIndex;
 ConcurrentDictionary<std::string> g_filePaths;
 
 std::atomic<bool> g_registered;
@@ -118,6 +118,11 @@ bool GetScopeForNode(const TSNode& node, FileScope* scope, ScopeHandle* handle)
 bool GetScopeAndParentForNode(const TSNode& node, FileScope* scope, TSNode* outParentNode, ScopeHandle* handle)
 {
 	auto parent = ts_node_parent(node);
+	if (ts_node_is_null(parent))
+	{
+		return false;
+	}
+
 	while (!scope->offsetToHandle.Contains(parent.context[0]))
 	{
 		if (ts_node_is_null(parent))
@@ -323,7 +328,7 @@ export_jai_lsp long long CreateTree(const char* documentPath, const char* code, 
 
 	if (auto fileScope = g_fileScopes.Read(documentHash))
 	{
-		if (!fileScope.value()->dirty)
+		if (fileScope.value()->status != FileScope::Status::dirty)
 			return 0;
 	}
 
@@ -483,7 +488,7 @@ export_jai_lsp long long UpdateTree(uint64_t hashValue)
 
 	g_trees.Write(documentHash, editedTree);
 	auto fileScope = g_fileScopes.Read(documentHash).value();
-	fileScope->dirty = true;
+	fileScope->status = FileScope::Status::dirty;
 
 
 	if constexpr (fileScope->INCREMENTAL_ANALYSIS)

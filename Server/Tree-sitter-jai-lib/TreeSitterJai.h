@@ -89,6 +89,7 @@ struct Module
 	Scope exportedScope;
 	void BuildExportedScope();
 	std::optional<ScopeDeclaration> Search(Hash hash);
+	int SearchAndGetFile(Hash hash, FileScope** outFile, Scope** declScope);
 };
 
 
@@ -174,7 +175,7 @@ extern ConcurrentDictionary<TSTree*> g_trees;
 extern ConcurrentDictionary<GapBuffer*> g_buffers;
 extern ConcurrentDictionary<std::string> g_filePaths;
 extern ConcurrentVector<std::string> g_modulePaths;
-extern ConcurrentVector<const FileScope*> g_fileScopeByIndex;
+extern ConcurrentVector<FileScope*> g_fileScopeByIndex;
 
 std::string DebugNode(const TSNode& node, const GapBuffer* gb);
 std::string_view GetIdentifier(const TSNode& node, std::string_view code);

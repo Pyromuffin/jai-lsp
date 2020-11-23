@@ -15,6 +15,11 @@ std::optional<ScopeDeclaration> Module::Search(Hash hash)
 	return moduleFile->SearchExports(hash);
 }
 
+int Module::SearchAndGetFile(Hash hash, FileScope** outFile, Scope** declScope)
+{
+	return moduleFile->SearchAndGetExport(hash, outFile, declScope);
+}
+
 
 
 export_jai_lsp long long CreateTreeFromPath(const char* document, const char* moduleName)
