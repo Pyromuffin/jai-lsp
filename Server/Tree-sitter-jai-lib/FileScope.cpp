@@ -586,12 +586,29 @@ void FileScope::HandleFunctionDefnitionParameters(TSNode node, ScopeHandle curre
 
 			//get identifier
 			cursor.Child();
+
+			DeclarationFlags flags = DeclarationFlags::None;
+			auto childType = cursor.Symbol();
+			if (childType == g_constants.usingExpression)
+			{
+				flags = flags | DeclarationFlags::Using;
+				cursor.Child();
+				cursor.Sibling();
+			}
+
 			auto identifierNode = cursor.Current();
+			
+
 			if (cursor.Sibling()) // always ':', probably. it may be possible to have a weird thing here where we dont have an rhs
 			{
 				cursor.Sibling(); // rhs expression, could be expression, variable initializer single, const initializer single
 				auto rhsNode = cursor.Current();
-				AddEntryToScope(identifierNode, buffer, GetScope(currentScope), TypeHandle::Null(), DeclarationFlags::None, rhsNode);
+				AddEntryToScope(identifierNode, buffer, GetScope(currentScope), TypeHandle::Null(), flags, rhsNode);
+			}
+
+			if ((flags & DeclarationFlags::Using) != 0)
+			{
+				cursor.Parent();
 			}
 
 			cursor.Parent();

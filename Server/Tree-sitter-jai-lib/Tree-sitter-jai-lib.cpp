@@ -64,6 +64,7 @@ export_jai_lsp int Init()
 	g_constants.unionDecl = ts_language_symbol_for_name(g_jaiLang, "union_definition", (uint32_t)strlen("union_definition"), true);
 	g_constants.enumDecl = ts_language_symbol_for_name(g_jaiLang, "enum_definition", (uint32_t)strlen("enum_definition"), true);
 	g_constants.usingStatement = ts_language_symbol_for_name(g_jaiLang, "using_statement", (uint32_t)strlen("using_statement"), true);
+	g_constants.usingExpression = ts_language_symbol_for_name(g_jaiLang, "using_expression", (uint32_t)strlen("using_expression"), true);
 
 	//SetupBuiltInTypes();
 	SetupBuiltInFunctions();

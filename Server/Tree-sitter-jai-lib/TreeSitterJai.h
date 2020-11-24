@@ -168,6 +168,7 @@ struct Constants
 	TSSymbol functionCall;
 	TSSymbol argument;
 	TSSymbol usingStatement;
+	TSSymbol usingExpression;
 };
 
 extern Constants g_constants;

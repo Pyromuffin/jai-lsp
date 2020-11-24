@@ -208,6 +208,10 @@ std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fi
 				return decl;
 			}
 		}
+		else
+		{
+			return decl;
+		}
 	}
 
 	return std::nullopt;
