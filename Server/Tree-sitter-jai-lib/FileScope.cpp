@@ -253,6 +253,7 @@ static ScopeDeclaration AddUsingToScope(TSNode node, const GapBuffer* buffer, Sc
 	}
 	else
 	{
+		entry.flags = entry.flags | DeclarationFlags::Expression;
 		entry.SetRHSOffset(0);
 		entry.id = node.id;
 	}
@@ -347,10 +348,12 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope,
 	if (exporting)
 		flags = flags | DeclarationFlags::Exported;
 
-	if (expressionType == g_constants.constDecl)
+	if (expressionType == g_constants.constDecl || expressionType == g_constants.varDecl)
 	{
 		//@TODO doesn't handle compound declarations.
-		flags = flags | DeclarationFlags::Constant;
+		if(expressionType == g_constants.constDecl)
+			flags = flags | DeclarationFlags::Constant;
+
 		auto hash = GetIdentifierHash(identifiers[0], buffer);
 
 		// descend into initializer
@@ -412,7 +415,9 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope,
 		// unresolved type?
 		//auto hash = GetIdentifierHash(identifiers[0], buffer);
 		//unresolvedTypes.push_back( std::make_tuple(hash, node));
+		// is it even p;ossible to get down here?
 		rhs = node;
+
 	}
 
 
@@ -626,8 +631,7 @@ TypeHandle FileScope::HandleFuncDefinitionNode(TSNode node, ScopeHandle currentS
 {
 	// so all we need to do here is allocate a type, find the scope node, add the type king info members and name. params get injected and resolved when we go to find the members in the scope later.
 
-	flags = flags | DeclarationFlags::Function;
-	flags = flags | DeclarationFlags::Evaluated;
+	flags = flags | DeclarationFlags::Function | DeclarationFlags::Evaluated;
 
 	if (auto scopeHandle = GetScopeFromOffset(node.context[0], edits, editCount))
 	{
@@ -674,21 +678,32 @@ static std::vector<const char*> builtins = {
 Module* RegisterModule(std::string moduleName, std::filesystem::path path);
 std::optional<std::filesystem::path> ModuleFilePath(std::string name);
 
-void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& exporting)
-{
-	file = AllocateScope(node, {UINT16_MAX}, false);
-	GetScope(file)->imperative = false;
 
+static void InitBuiltinScope(Scope* scope, FileScope* file)
+{
 	for (int i = 0; i < builtins.size(); i++)
 	{
-		auto handle = AllocateType();
-		auto king = &types[handle.index];
+		auto handle = file->AllocateType();
+		auto king = &file->types[handle.index];
 		king->name = std::string(builtins[i]);
 		ScopeDeclaration decl;
-		decl.flags = DeclarationFlags::BuiltIn | DeclarationFlags::Evaluated;
+		decl.flags = DeclarationFlags::Evaluated;
 		decl.type = handle;
-		GetScope(file)->Add(StringHash(builtins[i]), decl);
+		scope->Add(StringHash(builtins[i]), decl);
 	}
+}
+
+void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& exporting)
+{
+	auto builtinScopeHandle = AllocateScope({ 0 }, { UINT16_MAX }, false);
+	auto builtinScope = GetScope(builtinScopeHandle);
+	InitBuiltinScope(builtinScope, this);
+	stringType = builtinScope->TryGet(StringHash("string"))->type;
+	intType = builtinScope->TryGet(StringHash("int"))->type;
+	floatType = builtinScope->TryGet(StringHash("float"))->type;
+
+
+	file = AllocateScope(node, { UINT16_MAX }, false);
 
 
 	// uhhh just do all the imports now!
@@ -785,51 +800,65 @@ void FileScope::CheckDecls(std::vector<int>& declIndices, Scope* scope)
 		for (int i = 0; i < declIndices.size(); i++)
 		{
 			auto decl = scope->GetDeclFromIndex(declIndices[i]);
-			auto node = ConstructRhsFromDecl(*decl, currentTree);
-			bool usingExpression = decl->GetRHSOffset() == 0;
-
-			if (auto typeHandle = EvaluateNodeExpressionType(node, scope))
+	
+			if (decl->HasFlags(DeclarationFlags::Expression))
 			{
-				decl->type = *typeHandle;
-				decl->flags = decl->flags | DeclarationFlags::Evaluated;
+				// probably do something here.
 
-				if (decl->flags & DeclarationFlags::Using)
+
+			}
+
+			if (!decl->HasFlags(DeclarationFlags::Evaluated))
+			{
+				auto node = ConstructRhsFromDecl(*decl, currentTree);
+
+				// if this has usings, we need to inject them.
+				if (auto typeHandle = EvaluateNodeExpressionType(node, scope))
 				{
-					// add members of type to scope.
-					auto memberFile = g_fileScopeByIndex.Read(typeHandle->fileIndex);
-					auto memberHandle = memberFile->types[typeHandle->index].members;
-					auto memberScope = &memberFile->scopeKings[memberHandle.index];
-					auto memberSize = memberScope->declarations.Size();
-					std::vector<int> memberIndices;
+					decl->type = *typeHandle;
+					decl->flags = decl->flags | DeclarationFlags::Evaluated;
+				}
+			}
 
-					for (int i = 0; i < memberSize; i++)
+		
+			if (decl->HasFlags(DeclarationFlags::Evaluated | DeclarationFlags::Using))
+			{
+				// add members of type to scope.
+				auto typeHandle = decl->type;
+				auto memberFile = g_fileScopeByIndex.Read(typeHandle.fileIndex);
+				auto memberHandle = memberFile->types[typeHandle.index].members;
+				auto memberScope = &memberFile->scopeKings[memberHandle.index];
+				auto memberSize = memberScope->declarations.Size();
+				std::vector<int> memberIndices;
+
+				for (int i = 0; i < memberSize; i++)
+				{
+					auto decl = memberScope->GetDeclFromIndex(i);
+					if ( !decl->HasFlags(DeclarationFlags::Evaluated) || !decl->HasFlags(DeclarationFlags::Using) )
 					{
-						auto decl = memberScope->GetDeclFromIndex(i);
-						if ((decl->flags & DeclarationFlags::Evaluated) == 0)
-						{
-							memberIndices.push_back(i);
-						}
-					}
-
-					// we probably need to make sure we don't have any circular dependencies in here.
-					memberFile->CheckDecls(memberIndices, memberScope);
-					memberScope->InjectMembersTo(scope, decl->startByte);
-
-					decl = scope->GetDeclFromIndex(declIndices[i]);
-					decl->flags = (DeclarationFlags)(decl->flags & (~DeclarationFlags::Using));
-					if (usingExpression)
-					{
-						decl->SetLength(0); // this is a hack so that this 'using' declaration doesn't show up in completions.
+						memberIndices.push_back(i);
 					}
 				}
 
-				// erase swap back
-				declIndices[i] = declIndices.back();
-				declIndices.pop_back();
-				i--;
+				// we probably need to make sure we don't have any circular dependencies in here.
+				memberFile->CheckDecls(memberIndices, memberScope);
+				memberScope->InjectMembersTo(scope, decl->startByte);
 
-				resolvedAtLeastOne = true;
+				decl = scope->GetDeclFromIndex(declIndices[i]);
+				decl->flags = (DeclarationFlags)(decl->flags & (~DeclarationFlags::Using));
+				if (decl->HasFlags(DeclarationFlags::Expression))
+				{
+					decl->SetLength(0); // this is a hack so that this 'using' declaration doesn't show up in completions.
+					decl->flags = (DeclarationFlags)(decl->flags & (~DeclarationFlags::Expression));
+				}
 			}
+
+			// erase swap back
+			declIndices[i] = declIndices.back();
+			declIndices.pop_back();
+			i--;
+
+			resolvedAtLeastOne = true;
 
 
 		}
@@ -849,7 +878,7 @@ void FileScope::DoTypeCheckingAndInference(TSTree* tree)
 		for (int i = 0; i < size; i++)
 		{
 			auto decl = scope.GetDeclFromIndex(i);
-			if ((decl->flags & DeclarationFlags::Evaluated) == 0)
+			if (((decl->flags & DeclarationFlags::Evaluated) == 0) || ((decl->flags & DeclarationFlags::Using) != 0))
 			{
 				declarations.push_back(i);
 			}
@@ -859,53 +888,6 @@ void FileScope::DoTypeCheckingAndInference(TSTree* tree)
 		declarations.clear();
 	}
 
-/*
-	bool resolvedAtLeastOne = false;
-
-redo:
-	// resolve types now that all declarations have been added, we should be able to infer everything.
-	for (int i = 0; i < unresolvedNodes.size(); i++)
-	{
-		auto& unresolved = unresolvedNodes[i];
-		auto node = std::get<1>(unresolved);
-		auto hash = std::get<0>(unresolved);
-		auto symbol = ts_node_symbol(node);
-		bool usingStatement = hash.value == 0;
-		if (usingStatement)
-		{
-			node = ts_node_named_child(node, 0);
-		}
-
-		auto exprType = EvaluateNodeExpressionType(node, buffer, scope, stack);
-		if (exprType && *exprType != TypeHandle::Null())
-		{
-
-			if (usingStatement)
-			{
-				// defer these until we've solved everything else becuase we need fully populated scopes.
-				usings.push_back(std::make_pair(scope, *exprType));
-			}
-			else
-			{
-				GetScope(scope)->UpdateType(hash, *exprType);
-			}
-
-			// erase swap back.
-			unresolved = unresolvedNodes.back();
-			unresolvedNodes.pop_back();
-			i--;
-
-			resolvedAtLeastOne = true;
-		}
-	}
-
-	if (resolvedAtLeastOne && !unresolvedNodes.empty())
-	{
-		resolvedAtLeastOne = false;
-		goto redo;
-	}
-
-	*/
 }
 
 void FileScope::WaitForDependencies()
@@ -1370,6 +1352,38 @@ const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode nod
 }
 
 
+
+const std::optional<TypeHandle> FileScope::GetTypeFromSymbol(TSNode node, Scope* scope, TSSymbol symbol)
+{
+	if (symbol == g_constants.integerLiteral)
+	{
+		return intType;
+	}
+	else if (symbol == g_constants.stringLiteral)
+	{
+		return stringType;
+	}
+	else if (symbol == g_constants.floatLiteral)
+	{
+		return floatType;
+	}
+	else if (symbol == g_constants.unaryExpression)
+	{
+
+		auto unaryOp = ts_node_child(node, 0);
+		auto expr = ts_node_child(node, 1);
+		auto unarySymbol = ts_node_symbol(unaryOp);
+		// auto exprSymbol = ts_node_symbol(expr);
+
+		if (unarySymbol == g_constants.pointerTo)
+		{
+			return EvaluateNodeExpressionType(expr, scope);
+		}
+	}
+
+	return std::nullopt;
+}
+
 const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode node, Scope* scope)
 {
 	auto symbol = ts_node_symbol(node);
@@ -1403,6 +1417,10 @@ const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode nod
 					auto node = ConstructRhsFromDecl(*decl, currentTree);
 					if (auto type = EvaluateNodeExpressionType(node, scope))
 					{
+						// do we need to inject usings here ??? !? !? !???
+						// imagine the type we had evaluated was a using type
+						// we just marked it evaluated without injecting its usings
+						// so it will never inject the usings in the other scope becuase it wont get checked!
 						decl->type = *type;
 						decl->flags = decl->flags | DeclarationFlags::Evaluated;
 						return type;
@@ -1439,6 +1457,10 @@ const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode nod
 				return std::nullopt;
 			}
 		}
+	}
+	else
+	{
+		return GetTypeFromSymbol(node, scope, symbol);
 	}
 
 	return std::nullopt;

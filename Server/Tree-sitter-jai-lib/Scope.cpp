@@ -32,8 +32,8 @@ void Scope::AppendMembers(std::string& str, const GapBuffer* buffer, uint32_t up
 	for (int i = 0; i < size; i++)
 	{
 		auto& decl = data[i].value;
-		if (decl.flags & DeclarationFlags::BuiltIn)
-			continue;
+		//if (decl.flags & DeclarationFlags::BuiltIn)
+	//		continue;
 
 		if (imperative && (int)decl.startByte > upTo)
 			continue;

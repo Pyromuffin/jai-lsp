@@ -40,7 +40,6 @@ namespace jai_lsp
             var pos = request.Position;
             var namesPtr = TreeSitter.GetCompletionItems(documentHash, pos.Line, pos.Character, (int)request.Context.TriggerKind);
             var names = System.Runtime.InteropServices.Marshal.PtrToStringAnsi(namesPtr);
-            names = names.TrimEnd(',');
             if (names == null)
                 return new CompletionList();
 

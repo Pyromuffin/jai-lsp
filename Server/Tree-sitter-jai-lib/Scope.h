@@ -12,12 +12,16 @@
 enum DeclarationFlags : uint8_t
 {
 	None = 0,
-	Exported = 1 << 0,
-	Constant = 1 << 1,
-	Struct = 1 << 2,
-	Enum = 1 << 3,
-	Function = 1 << 4,
-	BuiltIn = 1 << 5,
+	TypeFlag0 = 1 << 0,
+	TypeFlag1 = 1 << 1, 
+
+	Struct = TypeFlag0,
+	Enum = TypeFlag0 | TypeFlag1,
+	Function = TypeFlag1,
+
+	Exported = 1 << 3,
+	Expression =  1 << 4,
+	Constant = 1 << 5,
 	Using = 1 << 6,
 	Evaluated = 1 << 7,
 };
@@ -85,6 +89,10 @@ public:
 	uint16_t GetRHSOffset() const;
 	void SetLength(uint16_t length);
 	void SetRHSOffset(uint16_t rhsOffset);
+	bool HasFlags(DeclarationFlags flags)
+	{
+		return (this->flags & flags) == flags;
+	}
 };
 
 
@@ -124,7 +132,8 @@ struct Scope
 	TypeHandle associatedType = TypeHandle::Null();
 	bool imperative;
 	ScopeHandle parent;
-
+	std::vector<ScopeDeclaration> usings;
+	
 	void Clear();
 	std::optional<ScopeDeclaration> TryGet(const Hash hash);
 	void Add(const Hash hash, const ScopeDeclaration decl);
@@ -136,4 +145,4 @@ struct Scope
 	int GetIndex(const Hash hash);
 };
 
-constexpr auto scopeSize = sizeof(Scope);
+constexpr auto scopeSize = sizeof(Scope); // i think these are cacheline aligned so we can spend 64 bytes on whatever we want !

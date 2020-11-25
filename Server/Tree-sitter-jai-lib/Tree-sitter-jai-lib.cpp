@@ -65,6 +65,12 @@ export_jai_lsp int Init()
 	g_constants.enumDecl = ts_language_symbol_for_name(g_jaiLang, "enum_definition", (uint32_t)strlen("enum_definition"), true);
 	g_constants.usingStatement = ts_language_symbol_for_name(g_jaiLang, "using_statement", (uint32_t)strlen("using_statement"), true);
 	g_constants.usingExpression = ts_language_symbol_for_name(g_jaiLang, "using_expression", (uint32_t)strlen("using_expression"), true);
+	g_constants.expression = ts_language_symbol_for_name(g_jaiLang, "expression", (uint32_t)strlen("expression"), true);
+	g_constants.integerLiteral = ts_language_symbol_for_name(g_jaiLang, "number", (uint32_t)strlen("number"), true);
+	g_constants.stringLiteral = ts_language_symbol_for_name(g_jaiLang, "string_literal", (uint32_t)strlen("string_literal"), true);
+	g_constants.floatLiteral = ts_language_symbol_for_name(g_jaiLang, "float_literal", (uint32_t)strlen("float_literal"), true);
+	g_constants.unaryExpression= ts_language_symbol_for_name(g_jaiLang, "unary_expression", (uint32_t)strlen("unary_expression"), true);
+	g_constants.pointerTo = ts_language_symbol_for_name(g_jaiLang, "pointer_to", (uint32_t)strlen("pointer_to"), true);
 
 	//SetupBuiltInTypes();
 	SetupBuiltInFunctions();
@@ -216,8 +222,8 @@ TokenType GetTokenTypeFromFlags(DeclarationFlags flags)
 		return TokenType::Type;
 	if (flags & DeclarationFlags::Enum)
 		return TokenType::Enum;
-	if (flags & DeclarationFlags::BuiltIn)
-		return TokenType::EnumMember;
+	//if (flags & DeclarationFlags::BuiltIn)
+//		return TokenType::EnumMember;
 
 	return TokenType::Variable;
 }

@@ -169,6 +169,13 @@ struct Constants
 	TSSymbol argument;
 	TSSymbol usingStatement;
 	TSSymbol usingExpression;
+	TSSymbol expression;
+	TSSymbol integerLiteral;
+	TSSymbol stringLiteral;
+	TSSymbol floatLiteral;
+	TSSymbol unaryExpression;
+	TSSymbol pointerTo;
+
 };
 
 extern Constants g_constants;

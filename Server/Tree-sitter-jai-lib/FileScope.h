@@ -37,6 +37,10 @@ struct FileScope
 
 	Cursor scope_builder_cursor;
 
+	TypeHandle intType;
+	TypeHandle stringType;
+	TypeHandle floatType;
+
 	/*
 	std::mutex declarationsFoundMutex;
 	std::condition_variable declarationsFoundCondition;
@@ -286,6 +290,7 @@ struct FileScope
 	void DoTokens2();
 	void DoTokens(TSNode root, TSInputEdit* edits, int editCount);
 	const std::optional<TypeHandle> EvaluateNodeExpressionType(TSNode node, const GapBuffer* buffer, ScopeHandle current, ScopeStack& stack);
+	const std::optional<TypeHandle> GetTypeFromSymbol(TSNode node, Scope* scope, TSSymbol symbol);
 	const std::optional<TypeHandle> EvaluateNodeExpressionType(TSNode node, Scope* scope);
 	void RebuildScope(TSNode newScopeNode, TSInputEdit* edits, int editCount, TSNode root);
 
