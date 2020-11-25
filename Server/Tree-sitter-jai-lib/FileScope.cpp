@@ -788,6 +788,24 @@ void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& export
 	ts_tree_cursor_delete(&cursor);
 }
 
+void FileScope::CheckScope(Scope* scope)
+{
+	std::vector<int> declarations;
+
+	auto size = scope->declarations.Size();
+	for (int i = 0; i < size; i++)
+	{
+		auto decl = scope->GetDeclFromIndex(i);
+		if (!decl->HasFlags(DeclarationFlags::Evaluated) || decl->HasFlags(DeclarationFlags::Using))
+		{
+			declarations.push_back(i);
+		}
+	}
+
+	CheckDecls(declarations, scope);
+	scope->checked = true;
+}
+
 
 void FileScope::CheckDecls(std::vector<int>& declIndices, Scope* scope)
 {
@@ -828,20 +846,11 @@ void FileScope::CheckDecls(std::vector<int>& declIndices, Scope* scope)
 				auto memberFile = g_fileScopeByIndex.Read(typeHandle.fileIndex);
 				auto memberHandle = memberFile->types[typeHandle.index].members;
 				auto memberScope = &memberFile->scopeKings[memberHandle.index];
-				auto memberSize = memberScope->declarations.Size();
-				std::vector<int> memberIndices;
-
-				for (int i = 0; i < memberSize; i++)
-				{
-					auto decl = memberScope->GetDeclFromIndex(i);
-					if ( !decl->HasFlags(DeclarationFlags::Evaluated) || !decl->HasFlags(DeclarationFlags::Using) )
-					{
-						memberIndices.push_back(i);
-					}
-				}
 
 				// we probably need to make sure we don't have any circular dependencies in here.
-				memberFile->CheckDecls(memberIndices, memberScope);
+				if(!memberScope->checked)
+					memberFile->CheckScope(memberScope);
+
 				memberScope->InjectMembersTo(scope, decl->startByte);
 
 				decl = scope->GetDeclFromIndex(declIndices[i]);
@@ -869,25 +878,12 @@ void FileScope::CheckDecls(std::vector<int>& declIndices, Scope* scope)
 
 void FileScope::DoTypeCheckingAndInference(TSTree* tree)
 {
-	std::vector<int> declarations;
-
 	// so i think that we should be able to do this in order of scopes.
 	for (auto& scope : scopeKings)
 	{
-		auto size = scope.declarations.Size();
-		for (int i = 0; i < size; i++)
-		{
-			auto decl = scope.GetDeclFromIndex(i);
-			if (((decl->flags & DeclarationFlags::Evaluated) == 0) || ((decl->flags & DeclarationFlags::Using) != 0))
-			{
-				declarations.push_back(i);
-			}
-		}
-
-		CheckDecls(declarations, &scope);
-		declarations.clear();
+		if(!scope.checked)
+			CheckScope(&scope);
 	}
-
 }
 
 void FileScope::WaitForDependencies()
@@ -1384,10 +1380,11 @@ const std::optional<TypeHandle> FileScope::GetTypeFromSymbol(TSNode node, Scope*
 	return std::nullopt;
 }
 
-const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode node, Scope* scope)
+const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode node, Scope* startScope)
 {
 	auto symbol = ts_node_symbol(node);
 	auto hash = GetIdentifierHash(node, buffer);
+	auto scope = startScope;
 
 	if (symbol == g_constants.identifier)
 	{
@@ -1395,6 +1392,8 @@ const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode nod
 
 		while (scope)
 		{
+			//assert(scope == startScope || scope->checked);
+
 			auto declIndex = scope->GetIndex(hash);
 			if (declIndex >= 0)
 			{
@@ -1417,12 +1416,14 @@ const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode nod
 					auto node = ConstructRhsFromDecl(*decl, currentTree);
 					if (auto type = EvaluateNodeExpressionType(node, scope))
 					{
-						// do we need to inject usings here ??? !? !? !???
-						// imagine the type we had evaluated was a using type
-						// we just marked it evaluated without injecting its usings
-						// so it will never inject the usings in the other scope becuase it wont get checked!
+						auto membersHandle = types[decl->type.index].members;
+						auto memberScope = GetScope(membersHandle);
+						if (memberScope != startScope && !memberScope->checked)
+							CheckScope(memberScope);
+
 						decl->type = *type;
 						decl->flags = decl->flags | DeclarationFlags::Evaluated;
+
 						return type;
 					}
 
@@ -1438,9 +1439,21 @@ const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode nod
 		auto declIndex = SearchAndGetModule(hash, &moduleFile, &declScope);
 		if (declIndex >= 0)
 		{
+			/*
+			if (declScope != startScope && !declScope->checked)
+			{
+				moduleFile->CheckScope(declScope); // this may be unnecesary 
+			}
+			*/
+
 			auto decl = declScope->GetDeclFromIndex(declIndex);
 			if (decl->flags & DeclarationFlags::Evaluated)
 			{
+				auto membersHandle = moduleFile->types[decl->type.index].members;
+				auto memberScope = moduleFile->GetScope(membersHandle);
+				if (memberScope != startScope && !memberScope->checked)
+					moduleFile->CheckScope(memberScope);
+
 				return decl->type;
 			}
 			else
@@ -1450,6 +1463,11 @@ const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode nod
 				{
 					decl->type = *type;
 					decl->flags = decl->flags | DeclarationFlags::Evaluated;
+					auto membersHandle = moduleFile->types[type->index].members;
+					auto memberScope = moduleFile->GetScope(membersHandle);
+					if (memberScope != startScope && !memberScope->checked)
+						moduleFile->CheckScope(memberScope);
+
 					return type;
 				}
 

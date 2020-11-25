@@ -283,6 +283,7 @@ struct FileScope
 	void HandleFunctionDefnitionParameters(TSNode node, ScopeHandle currentScope, Cursor& cursor);
 	TypeHandle HandleFuncDefinitionNode(TSNode node, ScopeHandle currentScope, std::vector<TSNode>& structs, DeclarationFlags& flags);
 	void CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& exporting);
+	void CheckScope(Scope* scope);
 	void CheckDecls(std::vector<int>& declIndices, Scope* scope);
 	void DoTypeCheckingAndInference(TSTree* tree);
 	void WaitForDependencies();

@@ -48,6 +48,7 @@ struct TypeHandle
 {
 	uint16_t fileIndex;
 	uint16_t index;
+	// consider moving members over to the handle !
 
 	static constexpr TypeHandle Null()
 	{
@@ -131,8 +132,9 @@ struct Scope
 	Scopemap declarations;
 	TypeHandle associatedType = TypeHandle::Null();
 	bool imperative;
+	bool checked = false;
 	ScopeHandle parent;
-	std::vector<ScopeDeclaration> usings;
+
 	
 	void Clear();
 	std::optional<ScopeDeclaration> TryGet(const Hash hash);
