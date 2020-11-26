@@ -13,7 +13,7 @@ extern "C" TSLanguage * tree_sitter_jai();
 extern TSLanguage* g_jaiLang;
 
 
-enum class TokenType : uint8_t
+enum class LSP_TokenType : uint8_t
 {
 	Documentation,
 	Comment,
@@ -55,7 +55,7 @@ struct SemanticToken
 	int line;
 	int col;
 	int length;
-	TokenType type;
+	LSP_TokenType type;
 	TokenModifier modifier;
 };
 
@@ -194,7 +194,7 @@ bool GetScopeAndParentForNode(const TSNode& node, FileScope* scope, TSNode* outP
 std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fileScope, const GapBuffer* buffer);
 const std::optional<TypeHandle> GetTypeForNode(TSNode node, FileScope* file);
 const TypeKing* GetType(TypeHandle handle);
-TokenType GetTokenTypeFromFlags(DeclarationFlags flags);
+LSP_TokenType GetTokenTypeFromFlags(DeclarationFlags flags);
 
 
 struct Timings

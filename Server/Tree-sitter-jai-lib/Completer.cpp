@@ -24,12 +24,16 @@ export_jai_lsp const char* GetCompletionItems(uint64_t hashValue, int row, int c
 	auto buffer = g_buffers.Read(documentHash).value();
 	auto fileScope = g_fileScopes.Read(documentHash).value();
 
-	if (fileScope->status != FileScope::Status::checked)
+	if (fileScope->status == FileScope::Status::scopesBuilt)
 	{
 		fileScope->WaitForDependencies();
 		fileScope->DoTypeCheckingAndInference(tree);
 
 		fileScope->status = FileScope::Status::checked;
+	}
+	else if (fileScope->status != FileScope::Status::checked)
+	{
+		return nullptr;
 	}
 
 

@@ -15,6 +15,9 @@
 #include "FileScope.h"
 
 
+//#include "windows.h"
+
+
 ConcurrentDictionary<TSTree*> g_trees;
 ConcurrentDictionary<GapBuffer*> g_buffers;
 ConcurrentDictionary<Module*> g_modules;
@@ -216,20 +219,20 @@ static SemanticToken GetTokenForNode(TSNode node, DeclarationFlags flags)
 
 
 
-TokenType GetTokenTypeFromFlags(DeclarationFlags flags)
+LSP_TokenType GetTokenTypeFromFlags(DeclarationFlags flags)
 {
 	if (flags & DeclarationFlags::Constant)
-		return TokenType::Number;
+		return LSP_TokenType::Number;
 	if (flags & DeclarationFlags::Function)
-		return TokenType::Function;
+		return LSP_TokenType::Function;
 	if (flags & DeclarationFlags::Struct)
-		return TokenType::Type;
+		return LSP_TokenType::Type;
 	if (flags & DeclarationFlags::Enum)
-		return TokenType::Enum;
+		return LSP_TokenType::Enum;
 	//if (flags & DeclarationFlags::BuiltIn)
 //		return TokenType::EnumMember;
 
-	return TokenType::Variable;
+	return LSP_TokenType::Variable;
 }
 
 
@@ -332,6 +335,17 @@ void IncrementalUpdate(TSTree* oldTree, TSTree* newTree)
 
 export_jai_lsp long long CreateTree(const char* documentPath, const char* code, int length)
 {
+	/*
+	auto thread = ::GetCurrentThread();
+	auto pathLength = strlen(documentPath) + 1;
+	wchar_t* wide = new wchar_t[pathLength];
+
+	size_t converted;
+	mbstowcs_s(&converted, wide, pathLength, documentPath, _TRUNCATE);
+	SetThreadDescription(thread, wide);
+
+	delete[] wide;
+	*/
 
 	auto timer = Timer("");
 

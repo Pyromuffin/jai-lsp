@@ -2,6 +2,8 @@
 #include <cassert>
 #include <filesystem>
 
+//#include "windows.h"
+
 bool HandleLoad(Hash documentHash);
 
 
@@ -184,7 +186,7 @@ void FileScope::HandleMemberReference(TSNode rhsNode, ScopeStack& stack, std::ve
 	// if we get here then we've got an unresolved identifier, that we will check when we've parsed the entire document.
 	unresolvedEntry.push_back(rhsNode);
 	unresolvedTokenIndex.push_back((uint32_t)tokens.size());
-	token.type = (TokenType)-1;
+	token.type = (LSP_TokenType)-1;
 
 	tokens.push_back(token);
 	return;
@@ -232,7 +234,7 @@ void FileScope::HandleVariableReference(TSNode node, ScopeStack& stack, std::vec
 	// if we get here then we've got an unresolved identifier, that we will check when we've parsed the entire document.
 	//unresolvedEntry.push_back(node);
 	//unresolvedTokenIndex.push_back((uint32_t)tokens.size());
-	token.type = (TokenType)-1;
+	token.type = (LSP_TokenType)-1;
 
 done:
 	tokens.push_back(token);
@@ -944,8 +946,12 @@ void FileScope::WaitForDependencies()
 
 void FileScope::Build()
 {
-	if (status != Status::dirty)
+
+	auto dirtyStatus = Status::dirty;
+	if (!status.compare_exchange_strong(dirtyStatus, Status::buliding))
+	{
 		return;
+	}
 
 	Clear();
 
@@ -967,7 +973,20 @@ void FileScope::Build()
 
 void FileScope::DoTokens2()
 {
-	if (status != Status::checked)
+	/*
+	auto thread = ::GetCurrentThread();
+	auto pathStatus ="tokens: " + documentHash.debug_name;
+	auto pathLength = strlen(pathStatus.c_str()) + 1;
+	wchar_t* wide = new wchar_t[pathLength];
+
+	size_t converted;
+	mbstowcs_s(&converted, wide, pathLength, pathStatus.c_str(), _TRUNCATE);
+	SetThreadDescription(thread, wide);
+
+	delete[] wide;
+	*/
+
+	if (status == Status::scopesBuilt)
 	{
 		WaitForDependencies();
 		DoTypeCheckingAndInference(currentTree);

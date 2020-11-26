@@ -56,6 +56,7 @@ struct FileScope
 	enum class Status
 	{
 		dirty,
+		buliding,
 		scopesBuilt,
 		checked,
 	};
