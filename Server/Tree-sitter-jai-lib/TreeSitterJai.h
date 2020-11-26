@@ -189,10 +189,10 @@ std::string DebugNode(const TSNode& node, const GapBuffer* gb);
 std::string_view GetIdentifier(const TSNode& node, std::string_view code);
 Hash GetIdentifierHash(const TSNode& node, std::string_view code);
 Hash GetIdentifierHash(const TSNode& node, const GapBuffer* buffer);
-bool GetScopeForNode(const TSNode& node, FileScope* scope, ScopeHandle* handle);
+std::optional<ScopeHandle> GetScopeForNode(const TSNode node, FileScope* scope);
 bool GetScopeAndParentForNode(const TSNode& node, FileScope* scope, TSNode* outParentNode, ScopeHandle* handle);
 std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fileScope, const GapBuffer* buffer);
-const TypeKing* GetTypeForNode(TSNode node, FileScope* fileScope, GapBuffer* buffer);
+const std::optional<TypeHandle> GetTypeForNode(TSNode node, FileScope* file);
 const TypeKing* GetType(TypeHandle handle);
 TokenType GetTokenTypeFromFlags(DeclarationFlags flags);
 

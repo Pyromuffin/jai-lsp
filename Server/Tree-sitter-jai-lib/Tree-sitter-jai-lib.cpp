@@ -103,23 +103,27 @@ static inline const char* ReadGapBuffer(void* payload, uint32_t byteOffset, TSPo
 	}
 }
 
-
-bool GetScopeForNode(const TSNode& node, FileScope* scope, ScopeHandle* handle)
+bool IsScopeNode(TSNode node)
 {
-	
+	auto symbol = ts_node_symbol(node);
+	return symbol == g_constants.imperativeScope || symbol == g_constants.dataScope || symbol == g_constants.funcDefinition;
+}
+
+
+std::optional<ScopeHandle> GetScopeForNode(const TSNode node, FileScope* scope)
+{
 	auto parent = ts_node_parent(node);
 	while (!scope->ContainsScope(parent.id))
 	{
 		if (ts_node_is_null(parent))
 		{
-			return false;
+			return std::nullopt;
 		}
 
 		parent = ts_node_parent(parent);
 	}
 
-	*handle = scope->GetScopeFromNodeID(parent.id);
-	return true;
+	return scope->GetScopeFromNodeID(parent.id);
 }
 
 bool GetScopeAndParentForNode(const TSNode& node, FileScope* scope, TSNode* outParentNode, ScopeHandle* handle)

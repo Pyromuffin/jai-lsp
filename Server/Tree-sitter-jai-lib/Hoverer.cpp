@@ -49,7 +49,7 @@ std::optional<ScopeDeclaration> GetDeclarationForNodeFromScope(TSNode node, File
 }
 
 
-std::optional<ScopeDeclaration> GetDeclarationForTopLevelNode(TSNode node, FileScope* fileScope, const GapBuffer* buffer, Scope** outScope)
+std::optional<ScopeDeclaration> GetDeclarationForRootMemberNode(TSNode node, FileScope* fileScope, const GapBuffer* buffer, Scope** outScope, FileScope** outFile)
 {
 	TSNode parent;
 	ScopeHandle handle;
@@ -65,8 +65,12 @@ std::optional<ScopeDeclaration> GetDeclarationForTopLevelNode(TSNode node, FileS
 
 TSNode ConstructRhsFromDecl(ScopeDeclaration decl, TSTree* tree);
 
+static inline std::optional<ScopeDeclaration> Evaluate(ScopeDeclaration* decl)
+{
 
-std::optional<ScopeDeclaration> EvaluateMemberAccess(TSNode node, FileScope* fileScope, const GapBuffer* buffer, Scope** outScope)
+}
+
+std::optional<ScopeDeclaration> EvaluateMemberAccess(TSNode node, FileScope* fileScope, const GapBuffer* buffer, Scope** outScope, FileScope** outFile)
 {
 	// rhs should always be an identifier ?
 
@@ -76,11 +80,11 @@ std::optional<ScopeDeclaration> EvaluateMemberAccess(TSNode node, FileScope* fil
 
 	if (IsMemberAccess(lhsSymbol))
 	{
-		lhsType = EvaluateMemberAccess(lhs, fileScope, buffer, outScope);
+		lhsType = EvaluateMemberAccess(lhs, fileScope, buffer, outScope, outFile);
 	}
 	else
 	{
-		if (auto decl = GetDeclarationForTopLevelNode(lhs, fileScope, buffer, outScope))
+		if (auto decl = GetDeclarationForRootMemberNode(lhs, fileScope, buffer, outScope, outFile) )
 		{
 			lhsType = decl;
 		}
@@ -89,12 +93,15 @@ std::optional<ScopeDeclaration> EvaluateMemberAccess(TSNode node, FileScope* fil
 	if (!lhsType)
 		return std::nullopt;
 
-	if ( (lhsType->flags & DeclarationFlags::Evaluated) == 0 )
+	if ( !lhsType->HasFlags(DeclarationFlags::Evaluated) )
 	{
-		auto rhsNode = ConstructRhsFromDecl(*lhsType, fileScope->currentTree);
-		if (auto typeHandle = fileScope->EvaluateNodeExpressionType(rhsNode, *outScope))
+		// so we need to get the file scope for this declaration as well
+
+		auto rhsNode = ConstructRhsFromDecl(*lhsType, (*outFile)->currentTree);
+		if (auto typeHandle = (*outFile)->EvaluateNodeExpressionType(rhsNode, *outScope))
 		{
 			lhsType->type = *typeHandle;
+			lhsType->flags = lhsType->flags | DeclarationFlags::Evaluated;
 		}
 		else
 		{
@@ -107,21 +114,72 @@ std::optional<ScopeDeclaration> EvaluateMemberAccess(TSNode node, FileScope* fil
 
 	auto rhs = ts_node_named_child(node, 1);
 	auto rhsHash = GetIdentifierHash(rhs, buffer);
-	if (lhsType->type.fileIndex >= g_fileScopes.size())
-	{
-		auto cool = 10;
-		cool++;
-	}
-		
 	auto typeKing = GetType(lhsType->type);
+
+	// search for rhs in the members of the LHS type
 
 	if (typeKing)
 	{
-		auto members = &g_fileScopeByIndex.Read(lhsType->type.fileIndex)->scopeKings[typeKing->members.index];
+		auto file = g_fileScopeByIndex.Read(lhsType->type.fileIndex);
+		auto members = &file->scopeKings[typeKing->members.index];
+		if (!members->checked)
+		{
+			file->CheckScope(members);
+		}
 
 		if (auto rhsDecl = members->TryGet(rhsHash))
 		{
+			*outFile = file;
 			return rhsDecl;
+		}
+	}
+
+	return std::nullopt;
+}
+
+
+static std::optional<TypeHandle> EvaluateMemberAccessType(TSNode node, FileScope* fileScope, Scope* scope)
+{
+	auto lhs = ts_node_named_child(node, 0);
+	auto lhsSymbol = ts_node_symbol(lhs);
+	std::optional<TypeHandle> lhsType = std::nullopt;
+
+	if (IsMemberAccess(lhsSymbol))
+	{
+		lhsType = EvaluateMemberAccessType(lhs, fileScope, scope);
+	}
+	else
+	{
+		// root of member access
+		if (auto type = fileScope->EvaluateNodeExpressionType(lhs, scope))
+		{
+			lhsType = type;
+		}
+	}
+
+	if (!lhsType)
+		return std::nullopt;
+
+	if (ts_node_symbol(node) == g_constants.memberAccessNothing)
+		return lhsType;
+
+	auto rhs = ts_node_named_child(node, 1);
+	auto rhsHash = GetIdentifierHash(rhs, fileScope->buffer);
+	// search for rhs in the members of the LHS type
+
+	{
+		auto file = g_fileScopeByIndex.Read(lhsType->fileIndex);
+		auto king = &file->types[lhsType->index];
+		auto members = &file->scopeKings[king->members.index];
+		if (!members->checked)
+		{
+			file->CheckScope(members);
+		}
+
+		if (auto rhsDecl = members->TryGet(rhsHash))
+		{
+			if(rhsDecl->HasFlags(DeclarationFlags::Evaluated))
+				return rhsDecl->type;
 		}
 	}
 
@@ -149,7 +207,8 @@ std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fi
 	if (IsMemberAccess(nodeSymbol))
 	{
 		Scope* s;
-		return EvaluateMemberAccess(node, fileScope, buffer, &s);
+		FileScope* file = fileScope;
+		return EvaluateMemberAccess(node, fileScope, buffer, &s, &file);
 	}
 
 	// identifier or something worse!
@@ -180,7 +239,8 @@ std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fi
 				else
 				{
 					Scope* s;
-					return EvaluateMemberAccess(parent, fileScope, buffer, &s);
+					FileScope* file = fileScope;
+					return EvaluateMemberAccess(parent, fileScope, buffer, &s, &file);
 				}
 			}
 		}
@@ -198,7 +258,7 @@ std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fi
 	auto decl = GetDeclarationForNodeFromScope(node, fileScope, buffer, scope, parent);
 	if (decl)
 	{
-		if ((decl->flags & DeclarationFlags::Evaluated) == 0)
+		if (!decl->HasFlags(DeclarationFlags::Evaluated))
 		{
 			auto rhsNode = ConstructRhsFromDecl(*decl, fileScope->currentTree);
 			if (auto typeHandle = fileScope->EvaluateNodeExpressionType(rhsNode, scope))
@@ -218,20 +278,25 @@ std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fi
 }
 
 
-const TypeKing* GetTypeForNode(TSNode node, FileScope* fileScope, GapBuffer* buffer)
+const std::optional<TypeHandle> GetTypeForNode(TSNode node, FileScope* file)
 {
-	if (auto decl = GetDeclarationForNode(node, fileScope, buffer))
+	// first is to get the scope for the node.
+	if (auto scopehandle = GetScopeForNode(node, file))
 	{
-		if (decl->flags & DeclarationFlags::Evaluated)
+		auto scope = &file->scopeKings[scopehandle->index];
+
+		auto nodeSymbol = ts_node_symbol(node);
+		if (IsMemberAccess(nodeSymbol))
 		{
-			if (auto type = GetType(decl->type))
-			{
-				return type;
-			}
+			return EvaluateMemberAccessType(node, file, scope);
 		}
+
+		// identifier
+		return file->EvaluateNodeExpressionType(node, scope);
 	}
 
-	return nullptr;
+
+	return std::nullopt;
 }
 
 
@@ -287,12 +352,13 @@ export_jai_lsp void GetSignature(uint64_t hashValue, int row, int col, const cha
 	int childCount = ts_node_child_count(node);
 	node = ts_node_child(node, 0); // get function name
 
-	if (auto type = GetTypeForNode(node, fileScope, buffer))
+	if (auto type = GetTypeForNode(node, fileScope))
 	{
-		strings.push_back(type->name.c_str());
+		auto king = GetType(*type);
+		strings.push_back(king->name.c_str());
 
-		*outParameterCount = (int)type->parameters.size();
-		for (auto& str : type->parameters)
+		*outParameterCount = (int)king->parameters.size();
+		for (auto& str : king->parameters)
 		{
 			strings.push_back(str.c_str());
 		}
@@ -327,7 +393,7 @@ export_jai_lsp void GetSignature(uint64_t hashValue, int row, int col, const cha
 				// argument!
 				parametersProvided++;
 
-				if (parametersProvided > type->parameters.size())
+				if (parametersProvided > king->parameters.size())
 				{
 					auto errorStart = ts_node_start_point(node);
 					auto errorEnd = ts_node_start_point(node);
@@ -370,10 +436,11 @@ export_jai_lsp const char* Hover(uint64_t hashValue, int row, int col)
 	}
 
 
-	if (auto type = GetTypeForNode(node, fileScope, buffer))
+	if (auto type = GetTypeForNode(node, fileScope))
 	{
+		auto king = GetType(*type);
 		ts_tree_delete(tree);
-		return type->name.c_str();
+		return king->name.c_str();
 	}
 
 

@@ -788,6 +788,7 @@ void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& export
 	ts_tree_cursor_delete(&cursor);
 }
 
+/*
 void FileScope::CheckScope(Scope* scope)
 {
 	std::vector<int> declarations;
@@ -805,20 +806,21 @@ void FileScope::CheckScope(Scope* scope)
 	CheckDecls(declarations, scope);
 	scope->checked = true;
 }
+*/
 
-
-void FileScope::CheckDecls(std::vector<int>& declIndices, Scope* scope)
+void FileScope::CheckScope(Scope* scope)
 {
-	bool resolvedAtLeastOne = true;
+	//bool resolvedAtLeastOne = true;
 
-	while (resolvedAtLeastOne && declIndices.size() > 0)
+	//while (resolvedAtLeastOne && declIndices.size() > 0)
 	{
-		resolvedAtLeastOne = false;
+		//resolvedAtLeastOne = false;
+		auto size = scope->declarations.Size();
 
-		for (int i = 0; i < declIndices.size(); i++)
+		for (int i = 0; i < size; i++)
 		{
-			auto decl = scope->GetDeclFromIndex(declIndices[i]);
-	
+			auto decl = scope->GetDeclFromIndex(i);
+
 			if (decl->HasFlags(DeclarationFlags::Expression))
 			{
 				// probably do something here.
@@ -830,7 +832,6 @@ void FileScope::CheckDecls(std::vector<int>& declIndices, Scope* scope)
 			{
 				auto node = ConstructRhsFromDecl(*decl, currentTree);
 
-				// if this has usings, we need to inject them.
 				if (auto typeHandle = EvaluateNodeExpressionType(node, scope))
 				{
 					decl->type = *typeHandle;
@@ -838,7 +839,7 @@ void FileScope::CheckDecls(std::vector<int>& declIndices, Scope* scope)
 				}
 			}
 
-		
+			// if this has usings, we need to inject them.
 			if (decl->HasFlags(DeclarationFlags::Evaluated | DeclarationFlags::Using))
 			{
 				// add members of type to scope.
@@ -848,12 +849,13 @@ void FileScope::CheckDecls(std::vector<int>& declIndices, Scope* scope)
 				auto memberScope = &memberFile->scopeKings[memberHandle.index];
 
 				// we probably need to make sure we don't have any circular dependencies in here.
-				if(!memberScope->checked)
+				if (!memberScope->checked)
 					memberFile->CheckScope(memberScope);
 
 				memberScope->InjectMembersTo(scope, decl->startByte);
+				size += memberScope->declarations.Size();
 
-				decl = scope->GetDeclFromIndex(declIndices[i]);
+				decl = scope->GetDeclFromIndex(i);
 				decl->flags = (DeclarationFlags)(decl->flags & (~DeclarationFlags::Using));
 				if (decl->HasFlags(DeclarationFlags::Expression))
 				{
@@ -862,17 +864,20 @@ void FileScope::CheckDecls(std::vector<int>& declIndices, Scope* scope)
 				}
 			}
 
-			// erase swap back
-			declIndices[i] = declIndices.back();
-			declIndices.pop_back();
-			i--;
+			//if( decl->HasFlags(DeclarationFlags::Evaluated) )
+			{
+				// it may be the case that we always remove this now? we evaluate rhs chains on demand and the order of the thing in the scope doesn't matter.
+				// erase swap back
+				//declIndices[i] = declIndices.back();
+				//declIndices.pop_back();
+				//i--;
 
-			resolvedAtLeastOne = true;
-
-
+				//resolvedAtLeastOne = true;
+			}
 		}
 	}
 
+	scope->checked = true;
 }
 
 
@@ -1416,7 +1421,7 @@ const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode nod
 					auto node = ConstructRhsFromDecl(*decl, currentTree);
 					if (auto type = EvaluateNodeExpressionType(node, scope))
 					{
-						auto membersHandle = types[decl->type.index].members;
+						auto membersHandle = types[type->index].members;
 						auto memberScope = GetScope(membersHandle);
 						if (memberScope != startScope && !memberScope->checked)
 							CheckScope(memberScope);

@@ -116,15 +116,15 @@ export_jai_lsp const char* GetCompletionItems(uint64_t hashValue, int row, int c
 	// if we're not in a scope, then try to get the type of the node we're completing
 	// such as a member access expression.
 	
-	if (auto decl = GetDeclarationForNode(node, fileScope, buffer))
+	if (auto typeHandle = GetTypeForNode(node, fileScope))
 	{
-		if (auto type = GetType(decl->type))
+		if (auto type = GetType(*typeHandle) )
 		{
-			auto memberScope = &g_fileScopeByIndex.Read(decl->type.fileIndex)->scopeKings[type->members.index];
+			auto memberScope = &g_fileScopeByIndex.Read(typeHandle->fileIndex)->scopeKings[type->members.index];
 			if (memberScope == nullptr)
 				return nullptr;
 	
-			auto bufferForType = g_fileScopeByIndex.Read(decl->type.fileIndex)->buffer;
+			auto bufferForType = g_fileScopeByIndex.Read(typeHandle->fileIndex)->buffer;
 			memberScope->AppendMembers(str, bufferForType);
 
 			return str.c_str();
@@ -132,7 +132,12 @@ export_jai_lsp const char* GetCompletionItems(uint64_t hashValue, int row, int c
 
 		return nullptr;
 	}
-	else
+	else if (invocation == TriggerCharacter)
+	{
+		// we pressed "." on a thing which we couldn't get the type of, so just return nothing;
+		return nullptr;
+	}
+	else 
 	{
 		TSNode parent;
 		ScopeHandle scope;
@@ -143,6 +148,7 @@ export_jai_lsp const char* GetCompletionItems(uint64_t hashValue, int row, int c
 			TSNode scopeScopeParent;
 			ScopeHandle scopeScope;
 			found = GetScopeAndParentForNode(parent, fileScope, &scopeScopeParent, &scopeScope);
+			bool foundAnything = found;
 
 			while (found)
 			{
@@ -150,8 +156,9 @@ export_jai_lsp const char* GetCompletionItems(uint64_t hashValue, int row, int c
 				found = GetScopeAndParentForNode(scopeScopeParent, fileScope, &scopeScopeParent, &scopeScope);
 			}
 
-			// and append whatever is in file scope for good measure:
-			fileScope->GetScope(fileScope->file)->AppendMembers(str, buffer);
+			// and append whatever is in file scope for good measure
+			if(!foundAnything)
+				fileScope->GetScope(fileScope->file)->AppendMembers(str, buffer);
 
 			// and append loads
 			for (auto load : fileScope->loads)
