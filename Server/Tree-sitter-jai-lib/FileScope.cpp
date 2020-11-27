@@ -163,7 +163,7 @@ static const TypeKing* GetGlobalType(TypeHandle handle)
 	return g_fileScopeByIndex.Read(handle.fileIndex)->GetType(handle);
 }
 
-void FileScope::HandleMemberReference(TSNode rhsNode, ScopeStack& stack, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex)
+void FileScope::HandleMemberReference(TSNode rhsNode, ScopeHandle scope)
 {
 	auto rhsHash = GetIdentifierHash(rhsNode, buffer);
 
@@ -175,17 +175,17 @@ void FileScope::HandleMemberReference(TSNode rhsNode, ScopeStack& stack, std::ve
 	token.length = end.column - start.column;
 	token.modifier = (TokenModifier)0;
 
-	auto decl = GetDeclarationForNode(rhsNode, this, buffer); // this should probably use the scope stack for better performance
-	if (decl)
+	FileScope* declFile;
+	Scope* declScope;
+	auto declIndex = GetDeclarationForNode(rhsNode, this, GetScope(scope), &declFile, &declScope); // this should probably use the scope stack for better performance
+	if (declIndex >= 0)
 	{
-		token.type = GetTokenTypeFromFlags(decl->flags);
+		token.type = GetTokenTypeFromFlags(declScope->GetDeclFromIndex(declIndex)->flags);
 		tokens.push_back(token);
 		return;
 	}
 
 	// if we get here then we've got an unresolved identifier, that we will check when we've parsed the entire document.
-	unresolvedEntry.push_back(rhsNode);
-	unresolvedTokenIndex.push_back((uint32_t)tokens.size());
 	token.type = (LSP_TokenType)-1;
 
 	tokens.push_back(token);
@@ -195,7 +195,7 @@ void FileScope::HandleMemberReference(TSNode rhsNode, ScopeStack& stack, std::ve
 
 
 
-void FileScope::HandleVariableReference(TSNode node, ScopeStack& stack, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex)
+void FileScope::HandleVariableReference(TSNode node, ScopeHandle scopeHandle)
 {
 	auto hash = GetIdentifierHash(node, buffer);
 
@@ -208,20 +208,20 @@ void FileScope::HandleVariableReference(TSNode node, ScopeStack& stack, std::vec
 	token.modifier = (TokenModifier)0;
 
 
-	for (int sp = 0; sp < stack.scopes.size(); sp++)
+	Scope* scope = GetScope(scopeHandle);
+	while (scope)
 	{
-		int index = (int)stack.scopes.size() - sp - 1;
-		auto frame = stack.scopes[index];
-		auto scope = GetScope(frame);
 		if (auto decl = scope->TryGet(hash))
 		{
 			// also we need to taken into account imperative scope order.
-			if (scope->imperative && decl->startByte > ts_node_start_byte(node))
-				continue;
-
-			token.type = GetTokenTypeFromFlags(decl->flags);
-			goto done;
+			if (!scope->imperative || (scope->imperative && decl->startByte <= ts_node_start_byte(node)) )
+			{
+				token.type = GetTokenTypeFromFlags(decl->flags);
+				goto done;
+			}
 		}
+
+		scope = GetScope(scope->parent);
 	}
 
 	// search modules
@@ -231,9 +231,6 @@ void FileScope::HandleVariableReference(TSNode node, ScopeStack& stack, std::vec
 		goto done;
 	}
 
-	// if we get here then we've got an unresolved identifier, that we will check when we've parsed the entire document.
-	//unresolvedEntry.push_back(node);
-	//unresolvedTokenIndex.push_back((uint32_t)tokens.size());
 	token.type = (LSP_TokenType)-1;
 
 done:
@@ -403,8 +400,8 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope,
 					handle = AllocateType();
 					auto king = &types[handle.index];
 					king->name = GetIdentifierFromBufferCopy(identifiers[0], buffer); //@todo this is probably not ideal, allocating a string for every type name every time.
-					king->members = AllocateScope(scopeNode, currentScope, false);
-					GetScope(king->members)->associatedType = handle;
+					handle.scope = AllocateScope(scopeNode, currentScope, false);
+					GetScope(handle.scope)->associatedType = handle;
 					structs.push_back(scopeNode);
 				}
 
@@ -451,7 +448,7 @@ void FileScope::HandleUsingStatement(TSNode node, ScopeHandle scope, std::vector
 
 
 
-void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope, ScopeStack& stack, bool& exporting, bool rebuild)
+void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope, bool& exporting, bool rebuild)
 {
 	// OK TO MAKE THIS WORK we need to handle the following two cases:
 	/*
@@ -520,17 +517,15 @@ void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope, ScopeStack
 
 
 
-	stack.scopes.push_back(scope);
 
 	// when rebuilding, we only want to find declarations for scopes that don't exist yet!
 	// i think we can find out which scopes don't exist from checking the offsets
 	for (auto structNode : structs)
 	{
 		auto scopeHandle = GetScopeFromNodeID(structNode.id);
-		FindDeclarations(structNode, scopeHandle, stack, exporting);
+		FindDeclarations(structNode, scopeHandle, exporting);
 	}
 
-	stack.scopes.pop_back();
 
 }
 
@@ -651,7 +646,7 @@ TypeHandle FileScope::HandleFuncDefinitionNode(TSNode node, ScopeHandle currentS
 	auto king = &types[typeHandle.index];
 	auto scopeHandle = AllocateScope(node, currentScope, true);
 	GetScope(scopeHandle)->associatedType = typeHandle;
-	king->members = scopeHandle;
+	typeHandle.scope = scopeHandle;
 	structs.push_back(node); // not the scope node! this is how we can know we're doing a function definition later.
 
 	return typeHandle;
@@ -772,7 +767,7 @@ void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& export
 
 	for (auto& load : loads)
 	{
-		if (auto fileOpt = g_fileScopes.Read(documentHash))
+		if (auto fileOpt = g_fileScopes.Read(load))
 		{
 			auto file = fileOpt.value();
 			if (file->status != Status::dirty)
@@ -783,9 +778,7 @@ void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& export
 	}
 
 
-	stack.scopes.push_back(file);
-
-	FindDeclarations(node, file, stack, exporting);
+	FindDeclarations(node, file, exporting);
 
 	ts_tree_cursor_delete(&cursor);
 }
@@ -847,8 +840,7 @@ void FileScope::CheckScope(Scope* scope)
 				// add members of type to scope.
 				auto typeHandle = decl->type;
 				auto memberFile = g_fileScopeByIndex.Read(typeHandle.fileIndex);
-				auto memberHandle = memberFile->types[typeHandle.index].members;
-				auto memberScope = &memberFile->scopeKings[memberHandle.index];
+				auto memberScope = memberFile->GetScope(typeHandle.scope);
 
 				// we probably need to make sure we don't have any circular dependencies in here.
 				if (!memberScope->checked)
@@ -1123,7 +1115,7 @@ void FileScope::DoTokens2()
 		}
 		case ScopeMarker::member_rhs:
 		{
-			HandleMemberReference(node, stack, unresolvedEntry, unresolvedTokenIndex);
+			HandleMemberReference(node, stack.scopes.back());
 			identifiersToSkip++;
 			break;
 		}
@@ -1135,7 +1127,7 @@ void FileScope::DoTokens2()
 				break;
 			}
 
-			HandleVariableReference(node, stack, unresolvedEntry, unresolvedTokenIndex);
+			HandleVariableReference(node, stack.scopes.back());
 			break;
 		}
 		case ScopeMarker::block_end:
@@ -1269,7 +1261,7 @@ void FileScope::DoTokens(TSNode root, TSInputEdit* edits, int editCount)
 			{
 				// naked scope
 				scopeHandle = AllocateScope(node, stack.scopes.back(), true);
-				FindDeclarations(node, *scopeHandle, stack, exporting);
+				FindDeclarations(node, *scopeHandle, exporting);
 			}
 
 			stack.scopes.push_back(*scopeHandle);
@@ -1279,7 +1271,7 @@ void FileScope::DoTokens(TSNode root, TSInputEdit* edits, int editCount)
 		}
 		case ScopeMarker::member_rhs:
 		{
-			HandleMemberReference(node, stack, unresolvedEntry, unresolvedTokenIndex);
+			HandleMemberReference(node, stack.scopes.back());
 			identifiersToSkip++;
 			break;
 		}
@@ -1291,7 +1283,7 @@ void FileScope::DoTokens(TSNode root, TSInputEdit* edits, int editCount)
 				break;
 			}
 
-			HandleVariableReference(node, stack, unresolvedEntry, unresolvedTokenIndex);
+			HandleVariableReference(node, stack.scopes.back());
 			break;
 		}
 		case ScopeMarker::block_end:
@@ -1328,50 +1320,6 @@ void FileScope::DoTokens(TSNode root, TSInputEdit* edits, int editCount)
 	ts_query_delete(query);
 }
 
-const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode node, const GapBuffer* buffer, ScopeHandle current, ScopeStack& stack)
-{
-	auto symbol = ts_node_symbol(node);
-	auto hash = GetIdentifierHash(node, buffer);
-
-	/*
-	if (symbol == g_constants.builtInType)
-	{
-		// built in types need to get addded to the global type king holder.
-		//return g_constants.builtInTypes[hash];
-	}
-	*/
-	if (symbol == g_constants.identifier)
-	{
-		// identifier of some kind. struct, union, or enum, or also a built in type now. we don't treat those differently than identifiers.
-
-		if (auto decl = GetScope(current)->TryGet(hash))
-		{
-			return decl.value().type;
-		}
-
-		for (int sp = 0; sp < stack.scopes.size(); sp++)
-		{
-			int index = (int)stack.scopes.size() - sp - 1;
-			auto frame = stack.scopes[index];
-			if (auto decl = GetScope(frame)->TryGet(hash))
-			{
-				return decl.value().type;
-			}
-		}
-		
-
-		if (auto decl = Search(hash))
-		{
-			return decl.value().type;
-		}
-	}
-
-	// unresolved type or expression of some kind.
-
-	return std::nullopt;
-}
-
-
 
 const std::optional<TypeHandle> FileScope::GetTypeFromSymbol(TSNode node, Scope* scope, TSSymbol symbol)
 {
@@ -1397,8 +1345,25 @@ const std::optional<TypeHandle> FileScope::GetTypeFromSymbol(TSNode node, Scope*
 
 		if (unarySymbol == g_constants.pointerTo)
 		{
-			return EvaluateNodeExpressionType(expr, scope);
+			if (auto type = EvaluateNodeExpressionType(expr, scope))
+			{
+				auto enoughRoom = type->Push(TypeAttribute::pointerTo);
+				assert(enoughRoom);
+
+				return type;
+			}
 		}
+		else if (unarySymbol == g_constants.arrayDecl)
+		{
+			if (auto type = EvaluateNodeExpressionType(expr, scope))
+			{
+				auto enoughRoom = type->Push(TypeAttribute::arrayOf);
+				assert(enoughRoom);
+
+				return type;
+			}
+		}
+
 	}
 
 	return std::nullopt;
@@ -1440,8 +1405,7 @@ const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode nod
 					auto node = ConstructRhsFromDecl(*decl, currentTree);
 					if (auto type = EvaluateNodeExpressionType(node, scope))
 					{
-						auto membersHandle = types[type->index].members;
-						auto memberScope = GetScope(membersHandle);
+						auto memberScope = GetScope(type->scope);
 						if (memberScope != startScope && !memberScope->checked)
 							CheckScope(memberScope);
 
@@ -1473,8 +1437,7 @@ const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode nod
 			auto decl = declScope->GetDeclFromIndex(declIndex);
 			if (decl->flags & DeclarationFlags::Evaluated)
 			{
-				auto membersHandle = moduleFile->types[decl->type.index].members;
-				auto memberScope = moduleFile->GetScope(membersHandle);
+				auto memberScope = moduleFile->GetScope(decl->type.scope);
 				if (memberScope != startScope && !memberScope->checked)
 					moduleFile->CheckScope(memberScope);
 
@@ -1487,8 +1450,7 @@ const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode nod
 				{
 					decl->type = *type;
 					decl->flags = decl->flags | DeclarationFlags::Evaluated;
-					auto membersHandle = moduleFile->types[type->index].members;
-					auto memberScope = moduleFile->GetScope(membersHandle);
+					auto memberScope = moduleFile->GetScope(type->scope);
 					if (memberScope != startScope && !memberScope->checked)
 						moduleFile->CheckScope(memberScope);
 
@@ -1594,7 +1556,7 @@ void FileScope::RebuildScope(TSNode newScopeNode, TSInputEdit* edits, int editCo
 		bool exporting;
 
 		_nodeToScopes.clear();
-		FindDeclarations(newScopeNode, handle, stack, exporting, true);
+		FindDeclarations(newScopeNode, handle, exporting, true);
 		
 		ClearScopePresentBits();
 		DoTokens(root, edits, editCount);

@@ -175,6 +175,7 @@ struct Constants
 	TSSymbol floatLiteral;
 	TSSymbol unaryExpression;
 	TSSymbol pointerTo;
+	TSSymbol arrayDecl;
 
 };
 
@@ -191,7 +192,7 @@ Hash GetIdentifierHash(const TSNode& node, std::string_view code);
 Hash GetIdentifierHash(const TSNode& node, const GapBuffer* buffer);
 std::optional<ScopeHandle> GetScopeForNode(const TSNode node, FileScope* scope);
 bool GetScopeAndParentForNode(const TSNode& node, FileScope* scope, TSNode* outParentNode, ScopeHandle* handle);
-std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fileScope, const GapBuffer* buffer);
+int GetDeclarationForNode(TSNode node, FileScope* fileScope, Scope* startingScope, FileScope** outFile, Scope** outScope);
 const std::optional<TypeHandle> GetTypeForNode(TSNode node, FileScope* file);
 const TypeKing* GetType(TypeHandle handle);
 LSP_TokenType GetTokenTypeFromFlags(DeclarationFlags flags);

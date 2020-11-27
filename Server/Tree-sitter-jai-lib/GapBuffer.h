@@ -74,8 +74,9 @@ inline Hash StringHash(std::string_view string)
     uint64_t hash = 0xcbf29ce484222325ULL;
     Hash h;
 
-#if _DEBUG
-    h.debug_name.reserve(string.length());
+#if HASH_DEBUG_STRING
+    h.debug_name = new char[string.length() + 1];
+    h.debug_name[string.length()] = '\0';
 #endif
 
 
@@ -84,8 +85,8 @@ inline Hash StringHash(std::string_view string)
         hash = hash ^ string[i];
         hash = hash * 0x00000100000001B3ULL;
 
-#if _DEBUG
-        h.debug_name.push_back(string[i]);
+#if HASH_DEBUG_STRING
+        h.debug_name[i]= string[i];
 #endif
     }
 
@@ -99,17 +100,19 @@ inline Hash StringHash(buffer_view string)
     uint64_t hash = 0xcbf29ce484222325ULL;
     Hash h;
 
-#if _DEBUG
-    h.debug_name.reserve(string.length);
+#if HASH_DEBUG_STRING
+    h.debug_name = new char[string.length + 1];
+    h.debug_name[string.length] = '\0';
 #endif
 
     for (uint32_t i = 0; i < string.length; i++)
     {
-        hash = hash ^ string.buffer->GetChar(string.start + i);
+        auto c = string.buffer->GetChar(string.start + i);
+        hash = hash ^ c;
         hash = hash * 0x00000100000001B3ULL;
 
-#if _DEBUG
-        h.debug_name.push_back(string.buffer->GetChar(string.start + i));
+#if HASH_DEBUG_STRING
+        h.debug_name[i] = c;
 #endif
     }
 

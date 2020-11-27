@@ -12,12 +12,12 @@
 enum DeclarationFlags : uint8_t
 {
 	None = 0,
-	TypeFlag0 = 1 << 0,
-	TypeFlag1 = 1 << 1, 
+	Struct = 1 << 0,
+	Function = 1 << 1,
 
-	Struct = TypeFlag0,
-	Enum = TypeFlag0 | TypeFlag1,
-	Function = TypeFlag1,
+	//Struct = TypeFlag0,
+	Enum = Struct | Function,
+	//Function = TypeFlag1,
 
 	Exported = 1 << 3,
 	Expression =  1 << 4,
@@ -33,21 +33,26 @@ struct ScopeHandle
 
 struct TypeKing
 {
-	enum Kind
-	{
-		structure,
-		function
-	};
+	// wwow we sure do need to handle overloads at some point!
 
 	std::string name;
 	std::vector<std::string> parameters;
-	ScopeHandle members;
+	//ScopeHandle members;
+};
+
+enum class TypeAttribute : uint16_t
+{
+	none		= 0,
+	pointerTo	= 1 << 0,
+	arrayOf		= 1 << 1,
 };
 
 struct TypeHandle
 {
 	uint16_t fileIndex;
 	uint16_t index;
+	ScopeHandle scope;
+	uint16_t attributes;
 	// consider moving members over to the handle !
 
 	static constexpr TypeHandle Null()
@@ -58,6 +63,30 @@ struct TypeHandle
 	bool operator==(const TypeHandle& rhs) const
 	{
 		return fileIndex == rhs.fileIndex && index == rhs.index;
+	}
+
+	TypeAttribute GetAttribute(size_t index)
+	{
+		auto shifted = attributes >> (index * 2);
+		auto masked = shifted & 0b11;
+		return (TypeAttribute)masked;
+	}
+
+	bool Push(TypeAttribute attr)
+	{
+		for (int i = 0; i < 8; i++)
+		{
+			auto shifted = attributes >> (i * 2);
+			auto masked = shifted & 0b11;
+			TypeAttribute ta = (TypeAttribute)masked;
+			if (ta == TypeAttribute::none)
+			{
+				attributes |= (uint16_t)attr << (i * 2);
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 };
@@ -96,7 +125,7 @@ public:
 	}
 };
 
-
+constexpr auto declSize = sizeof(ScopeDeclaration);
 
 
 

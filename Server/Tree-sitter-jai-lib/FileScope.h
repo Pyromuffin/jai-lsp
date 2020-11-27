@@ -91,6 +91,8 @@ struct FileScope
 	std::optional<ScopeDeclaration> SearchModules(Hash identifierHash);
 	int SearchAndGetModule(Hash identifierHash, FileScope** outFile, Scope** declScope);
 	std::optional<ScopeDeclaration> Search(Hash identifierHash);
+	void HandleMemberReference(TSNode rhsNode, ScopeHandle scope);
+	void HandleVariableReference(TSNode node, ScopeHandle scopeHandle);
 
 	Scope* GetScope(ScopeHandle handle)
 	{
@@ -253,7 +255,7 @@ struct FileScope
 		auto handle = ScopeHandle{ .index = static_cast<uint16_t>(scopeKings.size() - 1) };
 		GetScope(handle)->parent = parent;
 		GetScope(handle)->imperative = imperative;
-		_nodeToScopes[node.id] = handle;
+		_nodeToScopes.insert(std::make_pair(node.id, handle));
 		offsetToHandle.Add(node.context[0], handle);
 		return handle;
 	}
@@ -276,22 +278,18 @@ struct FileScope
 	}
 
 
-	void HandleMemberReference(TSNode rhsNode, ScopeStack& stack, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex);
-	void HandleVariableReference(TSNode node, ScopeStack& stack, std::vector<TSNode>& unresolvedEntry, std::vector<int>& unresolvedTokenIndex);
 	void HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope, std::vector<TSNode>& structs, bool exporting, bool usingFlag = false);
 	void HandleUsingStatement(TSNode node, ScopeHandle scope, std::vector<TSNode>& structs, bool& exporting);
-	void FindDeclarations(TSNode scopeNode, ScopeHandle scope, ScopeStack& stack, bool& exporting, bool rebuild = false);
+	void FindDeclarations(TSNode scopeNode, ScopeHandle scope, bool& exporting, bool rebuild = false);
 	void HandleFunctionDefnitionParameters(TSNode node, ScopeHandle currentScope, Cursor& cursor);
 	TypeHandle HandleFuncDefinitionNode(TSNode node, ScopeHandle currentScope, std::vector<TSNode>& structs, DeclarationFlags& flags);
 	void CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& exporting);
 	void CheckScope(Scope* scope);
-	void CheckDecls(std::vector<int>& declIndices, Scope* scope);
 	void DoTypeCheckingAndInference(TSTree* tree);
 	void WaitForDependencies();
 	void Build();
 	void DoTokens2();
 	void DoTokens(TSNode root, TSInputEdit* edits, int editCount);
-	const std::optional<TypeHandle> EvaluateNodeExpressionType(TSNode node, const GapBuffer* buffer, ScopeHandle current, ScopeStack& stack);
 	const std::optional<TypeHandle> GetTypeFromSymbol(TSNode node, Scope* scope, TSSymbol symbol);
 	const std::optional<TypeHandle> EvaluateNodeExpressionType(TSNode node, Scope* scope);
 	void RebuildScope(TSNode newScopeNode, TSInputEdit* edits, int editCount, TSNode root);

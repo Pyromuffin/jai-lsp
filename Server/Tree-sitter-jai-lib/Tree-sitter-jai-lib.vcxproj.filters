@@ -83,7 +83,6 @@
     <ClCompile Include="Hashmap.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="UsingSorter.ixx" />
     <ClCompile Include="Concurrent.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

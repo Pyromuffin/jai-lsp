@@ -124,7 +124,7 @@ export_jai_lsp const char* GetCompletionItems(uint64_t hashValue, int row, int c
 	{
 		if (auto type = GetType(*typeHandle) )
 		{
-			auto memberScope = &g_fileScopeByIndex.Read(typeHandle->fileIndex)->scopeKings[type->members.index];
+			auto memberScope = g_fileScopeByIndex.Read(typeHandle->fileIndex)->GetScope(typeHandle->scope);
 			if (memberScope == nullptr)
 				return nullptr;
 	

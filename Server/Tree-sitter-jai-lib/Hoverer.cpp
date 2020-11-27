@@ -17,27 +17,32 @@ const TypeKing* GetType(TypeHandle handle)
 	return &g_fileScopeByIndex.Read(handle.fileIndex)->types[handle.index];
 }
 
-std::optional<ScopeDeclaration> GetDeclarationForNodeFromScope(TSNode node, FileScope* fileScope, const GapBuffer* buffer, Scope* scope, TSNode parent)
+int GetDeclarationForNodeFromScope(TSNode node, FileScope* fileScope, Scope* scope, FileScope** outFile, Scope** outScope)
 {
 	// search scopes going up for entries, if they're data scopes. if they're imperative scopes then declarations have to be in order.
-	auto identifierHash = GetIdentifierHash(node, buffer);
+	auto identifierHash = GetIdentifierHash(node, fileScope->buffer);
 	while (scope != nullptr)
 	{
-		if (auto decl = scope->TryGet(identifierHash))
+		auto declIndex = scope->GetIndex(identifierHash);
+		if (declIndex >= 0)
 		{
 			// if the scope is imperative, then respect ordering, if it is not, just get the decl.
 			if (scope->imperative)
 			{
-				auto definitionStart = decl.value().startByte;
+				auto definitionStart = scope->GetDeclFromIndex(declIndex)->startByte;
 				auto identifierStart = ts_node_start_byte(node);
 				if (identifierStart >= definitionStart)
 				{
-					return decl;
+					*outFile = fileScope;
+					*outScope = scope;
+					return declIndex;
 				}
 			}
 			else
 			{
-				return decl;
+				*outFile = fileScope;
+				*outScope = scope;
+				return declIndex;
 			}
 		}
 
@@ -45,21 +50,7 @@ std::optional<ScopeDeclaration> GetDeclarationForNodeFromScope(TSNode node, File
 	}
 	
 
-	return fileScope->Search(identifierHash);
-}
-
-
-std::optional<ScopeDeclaration> GetDeclarationForRootMemberNode(TSNode node, FileScope* fileScope, const GapBuffer* buffer, Scope** outScope, FileScope** outFile)
-{
-	TSNode parent;
-	ScopeHandle handle;
-	auto found = GetScopeAndParentForNode(node, fileScope, &parent, &handle);
-
-	if (!found)
-		return std::nullopt;
-
-	*outScope = fileScope->GetScope(handle);
-	return GetDeclarationForNodeFromScope(node, fileScope, buffer, fileScope->GetScope(handle), parent);
+	return fileScope->SearchAndGetModule(identifierHash, outFile, outScope);
 }
 
 
@@ -70,28 +61,30 @@ static inline std::optional<ScopeDeclaration> Evaluate(ScopeDeclaration* decl)
 
 }
 
-std::optional<ScopeDeclaration> EvaluateMemberAccess(TSNode node, FileScope* fileScope, const GapBuffer* buffer, Scope** outScope, FileScope** outFile)
+int EvaluateMemberAccess(TSNode node, FileScope* fileScope, Scope* scope, Scope** outScope, FileScope** outFile)
 {
 	// rhs should always be an identifier ?
 
 	auto lhs = ts_node_named_child(node, 0);
 	auto lhsSymbol = ts_node_symbol(lhs);
-	std::optional<ScopeDeclaration> lhsType = std::nullopt;
+	ScopeDeclaration* lhsType = nullptr;
+	int declIndex = -1;
 
 	if (IsMemberAccess(lhsSymbol))
 	{
-		lhsType = EvaluateMemberAccess(lhs, fileScope, buffer, outScope, outFile);
+		declIndex = EvaluateMemberAccess(lhs, fileScope, scope, outScope, outFile);
+		if (declIndex >= 0)
+			lhsType = (*outScope)->GetDeclFromIndex(declIndex);
 	}
 	else
 	{
-		if (auto decl = GetDeclarationForRootMemberNode(lhs, fileScope, buffer, outScope, outFile) )
-		{
-			lhsType = decl;
-		}
+		declIndex = GetDeclarationForNodeFromScope(lhs, fileScope, scope, outFile, outScope);
+		if (declIndex >= 0)
+			lhsType = (*outScope)->GetDeclFromIndex(declIndex);
 	}
 
 	if (!lhsType)
-		return std::nullopt;
+		return -1;
 
 	if ( !lhsType->HasFlags(DeclarationFlags::Evaluated) )
 	{
@@ -105,36 +98,34 @@ std::optional<ScopeDeclaration> EvaluateMemberAccess(TSNode node, FileScope* fil
 		}
 		else
 		{
-			return std::nullopt;
+			return -1;
 		}
 	}
 
 	if (ts_node_symbol(node) == g_constants.memberAccessNothing)
-		return lhsType;
+		return declIndex;
 
 	auto rhs = ts_node_named_child(node, 1);
-	auto rhsHash = GetIdentifierHash(rhs, buffer);
-	auto typeKing = GetType(lhsType->type);
+	auto rhsHash = GetIdentifierHash(rhs, fileScope->buffer);
 
 	// search for rhs in the members of the LHS type
 
-	if (typeKing)
+	auto file = g_fileScopeByIndex.Read(lhsType->type.fileIndex);
+	auto members = file->GetScope(lhsType->type.scope);
+	if (!members->checked)
 	{
-		auto file = g_fileScopeByIndex.Read(lhsType->type.fileIndex);
-		auto members = &file->scopeKings[typeKing->members.index];
-		if (!members->checked)
-		{
-			file->CheckScope(members);
-		}
-
-		if (auto rhsDecl = members->TryGet(rhsHash))
-		{
-			*outFile = file;
-			return rhsDecl;
-		}
+		file->CheckScope(members);
 	}
 
-	return std::nullopt;
+	declIndex = members->GetIndex(rhsHash);
+	if (declIndex >= 0)
+	{
+		*outScope = members;
+		*outFile = file;
+		return declIndex;
+	}
+
+	return -1;
 }
 
 
@@ -169,8 +160,7 @@ static std::optional<TypeHandle> EvaluateMemberAccessType(TSNode node, FileScope
 
 	{
 		auto file = g_fileScopeByIndex.Read(lhsType->fileIndex);
-		auto king = &file->types[lhsType->index];
-		auto members = &file->scopeKings[king->members.index];
+		auto members = file->GetScope(lhsType->scope);
 		if (!members->checked)
 		{
 			file->CheckScope(members);
@@ -186,8 +176,8 @@ static std::optional<TypeHandle> EvaluateMemberAccessType(TSNode node, FileScope
 	return std::nullopt;
 }
 
-
-std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fileScope, const GapBuffer* buffer)
+// starting scope can be nullptr.
+int GetDeclarationForNode(TSNode node, FileScope* fileScope, Scope* startingScope, FileScope** outFile, Scope** outScope)
 {
 	/*
 				---------------
@@ -203,78 +193,65 @@ std::optional<ScopeDeclaration> GetDeclarationForNode(TSNode node, FileScope* fi
 	// if this is an identifier, then go up until we find either a scope or a member access.
 	// if this is a member access, then get the type of the RHS, which will require getting the type of the LHS.
 
+	if (startingScope == nullptr)
+	{
+		if (auto scope = GetScopeForNode(node, fileScope))
+		{
+			startingScope = fileScope->GetScope(*scope);
+		}
+	}
+
+
 	auto nodeSymbol = ts_node_symbol(node);
 	if (IsMemberAccess(nodeSymbol))
 	{
-		Scope* s;
-		FileScope* file = fileScope;
-		return EvaluateMemberAccess(node, fileScope, buffer, &s, &file);
+		return EvaluateMemberAccess(node, fileScope, startingScope, outScope, outFile);
 	}
 
 	// identifier or something worse!
-
 	auto parent = ts_node_parent(node);
-	bool inFileScope = false;
-	bool terminalLHS = false;
+	auto parentSymbol = ts_node_symbol(parent);
 
-	while (!fileScope->ContainsScope(parent.id))
+	if (IsMemberAccess(parentSymbol))
 	{
-		if (ts_node_is_null(parent))
+		auto lhs = ts_node_named_child(parent, 0);
+		if (lhs.id == node.id)
 		{
-			inFileScope = true;
-			break;
+			return GetDeclarationForNodeFromScope(node, fileScope, startingScope, outFile, outScope);
 		}
-
-		if (!terminalLHS)
+		else
 		{
-			auto parentSymbol = ts_node_symbol(parent);
-			if (IsMemberAccess(parentSymbol))
-			{
-				auto lhs = ts_node_named_child(parent, 0);
-				if (lhs.id == node.id)
-				{
-					// root of the member access, so just zoop up the tree.
-					terminalLHS = true;
-				}
-				else
-				{
-					Scope* s;
-					FileScope* file = fileScope;
-					return EvaluateMemberAccess(parent, fileScope, buffer, &s, &file);
-				}
-			}
+			return EvaluateMemberAccess(parent, fileScope, startingScope, outScope, outFile);
 		}
-
-		parent = ts_node_parent(parent);
 	}
 
-	Scope* scope = nullptr;
-	if (!inFileScope)
+	// this should probably? always be evalualted because this only runs in the tokens code.
+	return GetDeclarationForNodeFromScope(node, fileScope, startingScope, outFile, outScope);
+	
+	/*
+	auto declIndex = GetDeclarationForNodeFromScope(node, fileScope, startingScope, outFile, outScope);
+	if (declIndex >= 0)
 	{
-		auto handle = fileScope->GetScopeFromNodeID(parent.id);
-		scope = fileScope->GetScope(handle);
-	}
+		auto decl = (*outScope)->GetDeclFromIndex(declIndex);
 
-	auto decl = GetDeclarationForNodeFromScope(node, fileScope, buffer, scope, parent);
-	if (decl)
-	{
 		if (!decl->HasFlags(DeclarationFlags::Evaluated))
 		{
-			auto rhsNode = ConstructRhsFromDecl(*decl, fileScope->currentTree);
-			if (auto typeHandle = fileScope->EvaluateNodeExpressionType(rhsNode, scope))
+			auto rhsNode = ConstructRhsFromDecl(*decl, (*outFile)->currentTree);
+			if (auto typeHandle = (*outFile)->EvaluateNodeExpressionType(rhsNode, *outScope))
 			{
 				decl->type = *typeHandle;
 				decl->flags = decl->flags | DeclarationFlags::Evaluated;
-				return decl;
+				return declIndex;
 			}
 		}
 		else
 		{
-			return decl;
+			return declIndex;
 		}
 	}
 
-	return std::nullopt;
+	return -1;
+	*/
 }
 
 
@@ -419,8 +396,30 @@ export_jai_lsp void GetSignature(uint64_t hashValue, int row, int col, const cha
 }
 
 
+static void GetAttributeText(std::string& dst, TypeHandle handle)
+{
+	auto file = g_fileScopeByIndex.Read(handle.fileIndex);
+	auto king = &file->types[handle.index];
+	dst = "";
+
+	for (int i = 0; i < 8; i++)
+	{
+		auto attr = handle.GetAttribute(i);
+		if (attr == TypeAttribute::none)
+			break;
+		else if (attr == TypeAttribute::pointerTo)
+			dst.append("*");
+		else if (attr == TypeAttribute::arrayOf)
+			dst.append("[]");
+	}
+
+	dst.append(king->name);
+}
+
+
 export_jai_lsp const char* Hover(uint64_t hashValue, int row, int col)
 {
+	static std::string hoverText;
 	auto documentName = Hash{ .value = hashValue };
 
 	auto tree = ts_tree_copy(g_trees.Read(documentName).value());
@@ -438,9 +437,9 @@ export_jai_lsp const char* Hover(uint64_t hashValue, int row, int col)
 
 	if (auto type = GetTypeForNode(node, fileScope))
 	{
-		auto king = GetType(*type);
 		ts_tree_delete(tree);
-		return king->name.c_str();
+		GetAttributeText(hoverText, *type);
+		return hoverText.c_str();
 	}
 
 

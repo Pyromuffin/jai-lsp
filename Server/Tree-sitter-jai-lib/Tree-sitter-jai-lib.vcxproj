@@ -110,6 +110,7 @@
       <AdditionalIncludeDirectories>C:\Users\pyrom\Documents\tree-sitter-jai\src\tree_sitter;C:\Users\pyrom\Documents\GitHub\tree-sitter\lib\include;C:\Users\pyrom\Documents\GitHub\tree-sitter\lib\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <EnableModules>true</EnableModules>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -201,7 +202,6 @@
     <ClCompile Include="stb_ds.cpp" />
     <ClCompile Include="Timer.cpp" />
     <ClCompile Include="Tree-sitter-jai-lib.cpp" />
-    <ClCompile Include="UsingSorter.ixx" />
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="NatvisFile.natvis" />

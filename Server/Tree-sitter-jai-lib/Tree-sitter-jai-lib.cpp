@@ -74,6 +74,7 @@ export_jai_lsp int Init()
 	g_constants.floatLiteral = ts_language_symbol_for_name(g_jaiLang, "float_literal", (uint32_t)strlen("float_literal"), true);
 	g_constants.unaryExpression= ts_language_symbol_for_name(g_jaiLang, "unary_expression", (uint32_t)strlen("unary_expression"), true);
 	g_constants.pointerTo = ts_language_symbol_for_name(g_jaiLang, "pointer_to", (uint32_t)strlen("pointer_to"), true);
+	g_constants.arrayDecl = ts_language_symbol_for_name(g_jaiLang, "array_decl", (uint32_t)strlen("array_decl"), true);
 
 	//SetupBuiltInTypes();
 	SetupBuiltInFunctions();
@@ -113,7 +114,7 @@ bool IsScopeNode(TSNode node)
 }
 
 
-std::optional<ScopeHandle> GetScopeForNode(const TSNode node, FileScope* scope)
+std::optional<ScopeHandle> GetScopeForNode(TSNode node, FileScope* scope)
 {
 	auto parent = ts_node_parent(node);
 	while (!scope->ContainsScope(parent.id))

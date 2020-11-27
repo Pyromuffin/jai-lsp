@@ -86,6 +86,9 @@ ScopeDeclaration Scopemap::Get(Hash key)
 
 size_t Scopemap::Size() const 
 {
+	if (map == nullptr)
+		return 0;
+
 	return idlenu(map);
 }
 

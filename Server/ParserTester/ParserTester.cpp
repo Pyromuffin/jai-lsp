@@ -191,7 +191,7 @@ void ParseModules(int tries)
 int main()
 {
 
-	auto debugFile = "C:\\Users\\pyrom\\Desktop\\jai\\modules\\Basic\\Print.jai";
+	auto debugFile = "C:\\Users\\pyrom\\Documents\\tree-sitter-jai\\example-file.jai";
 	/*
 	while (true)
 	{
