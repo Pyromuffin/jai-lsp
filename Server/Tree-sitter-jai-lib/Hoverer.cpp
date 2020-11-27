@@ -260,18 +260,33 @@ const std::optional<TypeHandle> GetTypeForNode(TSNode node, FileScope* file)
 	// first is to get the scope for the node.
 	if (auto scopehandle = GetScopeForNode(node, file))
 	{
-		auto scope = &file->scopeKings[scopehandle->index];
-
+		auto scope = file->GetScope(*scopehandle);
 		auto nodeSymbol = ts_node_symbol(node);
+
 		if (IsMemberAccess(nodeSymbol))
 		{
 			return EvaluateMemberAccessType(node, file, scope);
 		}
 
-		// identifier
-		return file->EvaluateNodeExpressionType(node, scope);
-	}
+		// identifier or something worse!
+		auto parent = ts_node_parent(node);
+		auto parentSymbol = ts_node_symbol(parent);
 
+		if (IsMemberAccess(parentSymbol))
+		{
+			auto lhs = ts_node_named_child(parent, 0);
+			if (lhs.id == node.id)
+			{
+				return file->EvaluateNodeExpressionType(node, scope);
+			}
+			else
+			{
+				return EvaluateMemberAccessType(parent, file, scope);
+			}
+		}
+
+		return  file->EvaluateNodeExpressionType(node, scope);
+	}
 
 	return std::nullopt;
 }
