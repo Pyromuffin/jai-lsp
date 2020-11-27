@@ -511,6 +511,13 @@ void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope, bool& expo
 
 		else if (type == g_constants.scopeFile)
 			exporting = false;
+		else if (type == g_constants.identifier)
+		{
+			// if this is an identifier by itself, in an enum, then it is a declaration.
+			auto scopePtr = GetScope(scope);
+			AddEntryToScope(node, buffer, scopePtr, scopePtr->associatedType, DeclarationFlags::Evaluated | DeclarationFlags::Constant, { 0 });
+		}
+
 
 	} while (cursor.Sibling());
 
