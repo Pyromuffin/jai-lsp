@@ -692,13 +692,15 @@ static void InitBuiltinScope(Scope* scope, FileScope* file)
 
 void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& exporting)
 {
+	
+	/*
 	auto builtinScopeHandle = AllocateScope({ 0 }, { UINT16_MAX }, false);
 	auto builtinScope = GetScope(builtinScopeHandle);
 	InitBuiltinScope(builtinScope, this);
 	stringType = builtinScope->TryGet(StringHash("string"))->type;
 	intType = builtinScope->TryGet(StringHash("int"))->type;
 	floatType = builtinScope->TryGet(StringHash("float"))->type;
-
+	*/
 
 	file = AllocateScope(node, { UINT16_MAX }, false);
 

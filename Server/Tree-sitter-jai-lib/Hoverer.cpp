@@ -225,6 +225,7 @@ int GetDeclarationForNode(TSNode node, FileScope* fileScope, Scope* startingScop
 		}
 	}
 
+	// @TODO make sure this isn't broken
 	// this should probably? always be evalualted because this only runs in the tokens code.
 	return GetDeclarationForNodeFromScope(node, fileScope, startingScope, outFile, outScope);
 	
@@ -270,6 +271,11 @@ const std::optional<TypeHandle> GetTypeForNode(TSNode node, FileScope* file)
 
 		// identifier or something worse!
 		auto parent = ts_node_parent(node);
+		if (ts_node_is_null(parent))
+		{
+			return std::nullopt;
+		}
+
 		auto parentSymbol = ts_node_symbol(parent);
 
 		if (IsMemberAccess(parentSymbol))

@@ -117,11 +117,12 @@ bool IsScopeNode(TSNode node)
 std::optional<ScopeHandle> GetScopeForNode(TSNode node, FileScope* scope)
 {
 	auto parent = ts_node_parent(node);
+	
 	while (!scope->ContainsScope(parent.id))
 	{
 		if (ts_node_is_null(parent))
 		{
-			return std::nullopt;
+			return scope->file;
 		}
 
 		parent = ts_node_parent(parent);

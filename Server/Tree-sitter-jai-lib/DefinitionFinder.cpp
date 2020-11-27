@@ -36,11 +36,40 @@ export_jai_lsp void FindDefinition(uint64_t hashValue, int row, int col, uint64_
 
 	auto identifierNode = ts_node_named_descendant_for_point_range(root, point, point);
 	auto identifierHash = GetIdentifierHash(identifierNode, buffer);
+	*outOriginRange = NodeToRange(identifierNode);
+
+
+	FileScope* declFile;
+	Scope* declScope;
+	auto declIndex = GetDeclarationForNode(identifierNode, fileScope, nullptr, &declFile, &declScope);
+
+	if (declIndex >= 0)
+	{
+		*outFileHash = declFile->documentHash.value;
+		auto decl = declScope->GetDeclFromIndex(declIndex);
+
+		// wow this is dumb but we're going to query the tree to get the node for the declaration offset! hope that offset isn't stale!
+		auto declRoot = ts_tree_root_node(declFile->currentTree);
+		auto definitionNode = ts_node_named_descendant_for_byte_range(declRoot, decl->startByte, decl->startByte + decl->GetLength());
+		*outSelectionRange = NodeToRange(definitionNode);
+
+		auto parent = ts_node_parent(definitionNode);
+		if (!ts_node_is_null(parent))
+			*outTargetRange = NodeToRange(parent);
+		else
+			*outTargetRange = { 0 };
+
+		ts_tree_delete(tree);
+		return;
+	}
+
+	/*
+
 	TSNode parent;
 	ScopeHandle scope;
 	auto found = GetScopeAndParentForNode(identifierNode, fileScope, &parent, &scope);
 
-	*outOriginRange = NodeToRange(identifierNode);
+	
 	std::optional<ScopeDeclaration> entry = std::nullopt;
 
 	// try something real simple
@@ -156,7 +185,7 @@ export_jai_lsp void FindDefinition(uint64_t hashValue, int row, int col, uint64_
 		}
 	}
 
-
+	*/
 	*outFileHash = 0;
 	ts_tree_delete(tree);
 }
