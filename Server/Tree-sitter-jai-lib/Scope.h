@@ -31,14 +31,7 @@ struct ScopeHandle
 	uint16_t index;
 };
 
-struct TypeKing
-{
-	// wwow we sure do need to handle overloads at some point!
 
-	std::string name;
-	std::vector<std::string> parameters;
-	//ScopeHandle members;
-};
 
 enum class TypeAttribute : uint16_t
 {
@@ -90,6 +83,15 @@ struct TypeHandle
 	}
 
 };
+
+struct TypeKing
+{
+	// wwow we sure do need to handle overloads at some point!
+	std::string name;
+	std::vector<std::string> parameters;
+	std::vector<TypeHandle> returnTypes;
+};
+
 
 inline DeclarationFlags operator|(DeclarationFlags a, DeclarationFlags b)
 {

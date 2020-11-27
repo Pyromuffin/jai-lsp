@@ -380,7 +380,14 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope,
 	}
 	else if (expressionType == g_constants.structDecl || expressionType == g_constants.unionDecl || expressionType == g_constants.enumDecl)
 	{
-		flags = flags | DeclarationFlags::Struct;
+		if( expressionType == g_constants.enumDecl )
+			flags = flags | DeclarationFlags::Enum;
+		else
+			flags = flags | DeclarationFlags::Struct;
+		
+		auto declarationNode = cursor.Current();
+		structs.push_back(declarationNode);
+
 		flags = flags | DeclarationFlags::Evaluated;
 		// descend into struct decl to find the scope.
 		cursor.Child();
@@ -391,7 +398,7 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope,
 			if (symbol == g_constants.dataScope)
 			{
 
-				if (auto scopeHandle = GetScopeFromOffset(scopeNode.context[0], edits, editCount))
+				if (auto scopeHandle = GetScopeFromOffset(declarationNode.context[0], edits, editCount))
 				{
 					handle = GetScope(*scopeHandle)->associatedType;
 				}
@@ -400,9 +407,8 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope,
 					handle = AllocateType();
 					auto king = &types[handle.index];
 					king->name = GetIdentifierFromBufferCopy(identifiers[0], buffer); //@todo this is probably not ideal, allocating a string for every type name every time.
-					handle.scope = AllocateScope(scopeNode, currentScope, false);
+					handle.scope = AllocateScope(declarationNode, currentScope, false);
 					GetScope(handle.scope)->associatedType = handle;
-					structs.push_back(scopeNode);
 				}
 
 				cursor.Sibling(); // skip "}"
@@ -448,7 +454,7 @@ void FileScope::HandleUsingStatement(TSNode node, ScopeHandle scope, std::vector
 
 
 
-void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope, bool& exporting, bool rebuild)
+void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope,  bool& exporting, bool rebuild)
 {
 	// OK TO MAKE THIS WORK we need to handle the following two cases:
 	/*
@@ -476,11 +482,24 @@ void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope, bool& expo
 
 	auto cursor = Cursor();
 	cursor.Reset(scopeNode);
+	bool enumDecl = false;
 
 	if (ts_node_symbol(scopeNode) == g_constants.funcDefinition)
 	{
 		HandleFunctionDefnitionParameters(scopeNode, scope, cursor);
 	}
+	else if (ts_node_symbol(scopeNode) == g_constants.enumDecl)
+	{
+		enumDecl = true;
+		cursor.Child(); // inside enum
+		while (cursor.Sibling()); // should be the data scope.
+	}
+	else if (ts_node_symbol(scopeNode) == g_constants.structDecl)
+	{
+		cursor.Child(); // inside enum
+		while (cursor.Sibling()); // should be the data scope.
+	}
+
 
 
 	cursor.Child(); // inside the scope
@@ -511,7 +530,7 @@ void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope, bool& expo
 
 		else if (type == g_constants.scopeFile)
 			exporting = false;
-		else if (type == g_constants.identifier)
+		else if (type == g_constants.identifier && enumDecl)
 		{
 			// if this is an identifier by itself, in an enum, then it is a declaration.
 			auto scopePtr = GetScope(scope);
@@ -1007,7 +1026,8 @@ void FileScope::DoTokens2()
 	static const auto queryText =
 		"(function_definition) @func_defn" // hopefully this matches before the identifiers does.
 		"(imperative_scope) @imperative.scope"
-		"(data_scope) @data.scope"
+		"(struct_definition) @data.scope"
+		"(enum_definition) @data.scope"
 		"(member_access . (_) (_) @member_rhs )"
 		"(identifier) @var_ref"
 		"(block_end) @block_end"
@@ -1036,7 +1056,7 @@ void FileScope::DoTokens2()
 	{
 		func_defn,
 		imperativeScope,
-		dataScope,
+		structDecl,
 		member_rhs,
 		var_ref,
 		block_end,
@@ -1058,9 +1078,8 @@ void FileScope::DoTokens2()
 		auto node = match.captures[index].node;
 		switch (captureType)
 		{
-		case ScopeMarker::dataScope:
+		case ScopeMarker::structDecl:
 		{
-
 			if (!ContainsScope(node.id))
 			{
 				skipPopCount++;
