@@ -38,7 +38,7 @@ export_jai_lsp const char* GetCompletionItems(uint64_t hashValue, int row, int c
 
 
 
-	
+
 	auto point = TSPoint{ static_cast<uint32_t>(row), static_cast<uint32_t>(col) };
 	if (invocation == TriggerCharacter)
 		point.column--; // this is so that we try to get the node behind the "."
@@ -46,7 +46,7 @@ export_jai_lsp const char* GetCompletionItems(uint64_t hashValue, int row, int c
 						// also underflow may be possible ?? maybe ???
 
 	auto node = ts_node_named_descendant_for_point_range(root, point, point);
-	
+
 	/*
 	if (ts_node_has_error(node))
 	{
@@ -68,12 +68,22 @@ export_jai_lsp const char* GetCompletionItems(uint64_t hashValue, int row, int c
 	}
 
 
-	if (fileScope->ContainsScope(node.id))
+	// for some reason, getting the file scope from that range query doesn't give back the same node id as the one we started with ?
+	// so in that case, we use context[0] == 2 AKA start byte == 2, becuase that is where the file scope byte offset is (for some reason again).
+	if (fileScope->ContainsScope(node.id) || node.context[0] == 2) 
 	{
 		// we've invoked this on some empty space in a scope, so lets just print out whatever is in scope up to this point.
-		auto scopeHandle = fileScope->GetScopeFromNodeID(node.id);
+
+		ScopeHandle scopeHandle;
+		if (node.context[0] == 2)
+			scopeHandle = fileScope->file;
+		else
+			scopeHandle = fileScope->GetScopeFromNodeID(node.id);
+
 		auto scope = fileScope->GetScope(scopeHandle);
 		
+		
+
 		while (scope)
 		{
 			scope->AppendMembers(str, buffer);
