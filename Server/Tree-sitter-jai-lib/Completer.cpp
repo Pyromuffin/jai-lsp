@@ -57,11 +57,11 @@ export_jai_lsp const char* GetCompletionItems(uint64_t hashValue, int row, int c
 	*/
 
 	auto symbol = ts_node_symbol(node);
-	if (symbol == g_constants.imperativeScope)
+	if (symbol == g_constants.imperativeScope || symbol == g_constants.dataScope)
 	{
 		auto parent = ts_node_parent(node);
 		auto parentSymbol = ts_node_symbol(parent);
-		if (parentSymbol == g_constants.funcDefinition)
+		if (parentSymbol == g_constants.funcDefinition || parentSymbol == g_constants.enumDecl || parentSymbol == g_constants.structDecl|| parentSymbol == g_constants.unionDecl)
 		{
 			node = parent;
 		}
@@ -96,6 +96,9 @@ export_jai_lsp const char* GetCompletionItems(uint64_t hashValue, int row, int c
 		{
 			if (auto loadedScope = g_fileScopes.Read(load))
 			{
+				if ((*loadedScope)->fileIndex == 0) // skip built in scope.
+					continue;
+
 				auto loadedBuffer = g_buffers.Read(load).value();
 				(*loadedScope)->GetScope((*loadedScope)->file)->AppendExportedMembers(str, loadedBuffer);
 			}
@@ -116,6 +119,9 @@ export_jai_lsp const char* GetCompletionItems(uint64_t hashValue, int row, int c
 				{
 					if (auto loadedScope = g_fileScopes.Read(load))
 					{
+						if ((*loadedScope)->fileIndex == 0) // skip built in scope.
+							continue;
+
 						auto loadedBuffer = g_buffers.Read(load).value();
 						(*loadedScope)->GetScope((*loadedScope)->file)->AppendExportedMembers(str, loadedBuffer);
 					}

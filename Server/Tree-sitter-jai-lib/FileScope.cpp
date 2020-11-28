@@ -2,7 +2,11 @@
 #include <cassert>
 #include <filesystem>
 
-//#include "windows.h"
+TypeHandle FileScope::intType;
+TypeHandle FileScope::stringType;
+TypeHandle FileScope::floatType;
+Scope* FileScope::builtInScope;
+
 
 bool HandleLoad(Hash documentHash);
 
@@ -223,6 +227,12 @@ void FileScope::HandleVariableReference(TSNode node, ScopeHandle scopeHandle)
 
 		scope = GetScope(scope->parent);
 	}
+
+	if (builtInScope->TryGet(hash))
+	{
+		return;
+	}
+
 
 	// search modules
 	if (auto decl = SearchModules(hash))
@@ -679,42 +689,12 @@ TypeHandle FileScope::HandleFuncDefinitionNode(TSNode node, ScopeHandle currentS
 }
 
 
-static std::vector<const char*> builtins = {
-		"bool",
-		"float",
-		"float32",
-		"float64",
-		"char",
-		"string",
-		"s8",
-		"s16",
-		"s32",
-		"s64",
-		"int",
-		"u8",
-		"u16",
-		"u32",
-		"u64",
-		"void"
-};
 
 Module* RegisterModule(std::string moduleName, std::filesystem::path path);
 std::optional<std::filesystem::path> ModuleFilePath(std::string name);
 
 
-static void InitBuiltinScope(Scope* scope, FileScope* file)
-{
-	for (int i = 0; i < builtins.size(); i++)
-	{
-		auto handle = file->AllocateType();
-		auto king = &file->types[handle.index];
-		king->name = std::string(builtins[i]);
-		ScopeDeclaration decl;
-		decl.flags = DeclarationFlags::Evaluated;
-		decl.type = handle;
-		scope->Add(StringHash(builtins[i]), decl);
-	}
-}
+
 
 void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& exporting)
 {
@@ -723,12 +703,11 @@ void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& export
 	auto builtinScopeHandle = AllocateScope({ 0 }, { UINT16_MAX }, false);
 	auto builtinScope = GetScope(builtinScopeHandle);
 	InitBuiltinScope(builtinScope, this);
-	stringType = builtinScope->TryGet(StringHash("string"))->type;
-	intType = builtinScope->TryGet(StringHash("int"))->type;
-	floatType = builtinScope->TryGet(StringHash("float"))->type;
+	
 	*/
 
 	file = AllocateScope(node, { UINT16_MAX }, false);
+	loads.push_back(StringHash("builtin"));
 
 
 	// uhhh just do all the imports now!

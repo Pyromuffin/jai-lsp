@@ -33,12 +33,69 @@ static char names[1000];
 export_jai_lsp long long UpdateTree(uint64_t hashValue);
 
 
+static std::vector<const char*> builtins = {
+		"bool",
+		"float",
+		"float32",
+		"float64",
+		"char",
+		"string",
+		"s8",
+		"s16",
+		"s32",
+		"s64",
+		"int",
+		"u8",
+		"u16",
+		"u32",
+		"u64",
+		"void",
+		"context"
+};
+
 static void SetupBuiltInFunctions()
 {
 	// some builtins:
 	// size_of
 	// type_of
-	// assert
+	// it, it_index
+
+	// create built in file scope? 
+	auto file = new FileScope();
+	g_fileScopes.Write(StringHash("builtin"), file);
+	g_fileScopeByIndex.Append(file);
+	file->file = { 0 };
+
+	Scope scope;
+	for (int i = 0; i < builtins.size(); i++)
+	{
+		auto handle = file->AllocateType();
+		auto king = &file->types[handle.index];
+		king->name = std::string(builtins[i]);
+		ScopeDeclaration decl;
+		decl.flags = DeclarationFlags::Evaluated | DeclarationFlags::Exported;
+		decl.type = handle;
+		scope.Add(StringHash(builtins[i]), decl);
+	}
+
+	auto boolType = scope.TryGet(StringHash("bool"))->type;
+
+	ScopeDeclaration boolDecl;
+	boolDecl.flags = DeclarationFlags::Evaluated | DeclarationFlags::Exported;
+	boolDecl.startByte = 0;
+	boolDecl.SetLength(0);
+	boolDecl.type = boolType;
+
+	scope.Add(StringHash("true"), boolDecl);
+	scope.Add(StringHash("false"), boolDecl);
+
+	//file->loads.push_back(StringHash("preload.jai"));
+	file->scopeKings.push_back(scope);
+	FileScope::builtInScope = &file->scopeKings[0];
+	
+	FileScope::stringType = scope.TryGet(StringHash("string"))->type;
+	FileScope::intType = scope.TryGet(StringHash("int"))->type;
+	FileScope::floatType = scope.TryGet(StringHash("float"))->type;
 
 }
 
@@ -231,9 +288,8 @@ LSP_TokenType GetTokenTypeFromFlags(DeclarationFlags flags)
 		return LSP_TokenType::Function;
 	if (flags & DeclarationFlags::Struct)
 		return LSP_TokenType::Type;
-
 	//if (flags & DeclarationFlags::BuiltIn)
-//		return TokenType::EnumMember;
+	//	return LSP_TokenType::EnumMember;
 
 	return LSP_TokenType::Variable;
 }

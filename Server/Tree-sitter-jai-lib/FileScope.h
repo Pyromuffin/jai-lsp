@@ -37,9 +37,10 @@ struct FileScope
 
 	Cursor scope_builder_cursor;
 
-	TypeHandle intType;
-	TypeHandle stringType;
-	TypeHandle floatType;
+	static TypeHandle intType;
+	static TypeHandle stringType;
+	static TypeHandle floatType;
+	static Scope* builtInScope;
 
 	/*
 	std::mutex declarationsFoundMutex;

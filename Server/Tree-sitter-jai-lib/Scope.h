@@ -19,6 +19,7 @@ enum DeclarationFlags : uint8_t
 	Enum = Struct | Function,
 	//Function = TypeFlag1,
 
+	//BuiltIn = 1 << 2,
 	Exported = 1 << 3,
 	Expression =  1 << 4,
 	Constant = 1 << 5,
