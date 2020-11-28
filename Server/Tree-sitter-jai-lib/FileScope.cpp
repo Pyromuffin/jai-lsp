@@ -6,6 +6,8 @@ TypeHandle FileScope::intType;
 TypeHandle FileScope::stringType;
 TypeHandle FileScope::floatType;
 Scope* FileScope::builtInScope;
+Hash FileScope::preloadHash;
+
 
 
 bool HandleLoad(Hash documentHash);
@@ -708,6 +710,8 @@ void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& export
 
 	file = AllocateScope(node, { UINT16_MAX }, false);
 	loads.push_back(StringHash("builtin"));
+	if(documentHash != preloadHash)
+		loads.push_back(preloadHash);
 
 
 	// uhhh just do all the imports now!

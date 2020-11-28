@@ -38,6 +38,12 @@ export_jai_lsp void FindDefinition(uint64_t hashValue, int row, int col, uint64_
 	auto identifierHash = GetIdentifierHash(identifierNode, buffer);
 	*outOriginRange = NodeToRange(identifierNode);
 
+	if (FileScope::builtInScope->TryGet(identifierHash))
+	{
+		*outFileHash = 0;
+		return;
+	}
+
 
 	FileScope* declFile;
 	Scope* declScope;

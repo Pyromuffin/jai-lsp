@@ -41,6 +41,7 @@ struct FileScope
 	static TypeHandle stringType;
 	static TypeHandle floatType;
 	static Scope* builtInScope;
+	static Hash preloadHash;
 
 	/*
 	std::mutex declarationsFoundMutex;

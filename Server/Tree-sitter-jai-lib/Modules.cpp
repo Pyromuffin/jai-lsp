@@ -43,6 +43,19 @@ export_jai_lsp long long CreateTreeFromPath(const char* document, const char* mo
 export_jai_lsp void AddModuleDirectory(const char* moduleDirectory)
 {
 	g_modulePaths.Append(moduleDirectory);
+
+	// see if we can find preload
+	auto path = std::filesystem::path(moduleDirectory);
+	path = path.append("Preload.jai");
+
+	if (std::filesystem::exists(path))
+	{
+		FileScope::preloadHash = StringHash(path.string());
+		if (!g_filePaths.Read(FileScope::preloadHash))
+		{
+			g_filePaths.Write(FileScope::preloadHash, path.string());
+		}
+	}
 }
 
 
