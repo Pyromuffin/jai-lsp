@@ -70,12 +70,13 @@ export_jai_lsp const char* GetCompletionItems(uint64_t hashValue, int row, int c
 
 	// for some reason, getting the file scope from that range query doesn't give back the same node id as the one we started with ?
 	// so in that case, we use context[0] == 2 AKA start byte == 2, becuase that is where the file scope byte offset is (for some reason again).
-	if (fileScope->ContainsScope(node.id) || node.context[0] == 2) 
+	// i have no idea why it is also sometimes 0.
+	if (fileScope->ContainsScope(node.id) || node.context[0] == 2 || node.context[0] == 0)
 	{
 		// we've invoked this on some empty space in a scope, so lets just print out whatever is in scope up to this point.
 
 		ScopeHandle scopeHandle;
-		if (node.context[0] == 2)
+		if (node.context[0] == 2 || node.context[0] == 0)
 			scopeHandle = fileScope->file;
 		else
 			scopeHandle = fileScope->GetScopeFromNodeID(node.id);
@@ -90,6 +91,13 @@ export_jai_lsp const char* GetCompletionItems(uint64_t hashValue, int row, int c
 			scope = fileScope->GetScope(scope->parent);
 		}
 
+		/*
+		// if invoked in a scope, just return after we've gotten everything for just our file. We likely don't want imports at this point.
+		if (invocation == Invoked)
+		{
+			return str.c_str();
+		}
+		*/
 
 		// and append loads
 		for (auto load : fileScope->loads)
@@ -185,6 +193,9 @@ export_jai_lsp const char* GetCompletionItems(uint64_t hashValue, int row, int c
 			{
 				if (auto loadedScope = g_fileScopes.Read(load))
 				{
+					if ((*loadedScope)->fileIndex == 0) // skip built in scope.
+						continue;
+
 					auto loadedBuffer = g_buffers.Read(load).value();
 					(*loadedScope)->GetScope((*loadedScope)->file)->AppendExportedMembers(str, loadedBuffer);
 				}
@@ -205,6 +216,9 @@ export_jai_lsp const char* GetCompletionItems(uint64_t hashValue, int row, int c
 					{
 						if (auto loadedScope = g_fileScopes.Read(load))
 						{
+							if ((*loadedScope)->fileIndex == 0) // skip built in scope.
+								continue;
+
 							auto loadedBuffer = g_buffers.Read(load).value();
 							(*loadedScope)->GetScope((*loadedScope)->file)->AppendExportedMembers(str, loadedBuffer);
 						}

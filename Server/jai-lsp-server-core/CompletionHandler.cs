@@ -36,6 +36,7 @@ namespace jai_lsp
 
         public async Task<CompletionList> Handle(CompletionParams request, CancellationToken cancellationToken)
         {
+            
             var documentHash = Hash.StringHash(request.TextDocument.Uri.GetFileSystemPath());
             var pos = request.Position;
             var namesPtr = TreeSitter.GetCompletionItems(documentHash, pos.Line, pos.Character, (int)request.Context.TriggerKind);
@@ -46,11 +47,18 @@ namespace jai_lsp
             var nameList = names.Split(",");
             List<CompletionItem> items = new List<CompletionItem>(nameList.Length);
 
+            int sortValue = 0;
             foreach (var name in nameList)
             {
+                if (name == "")
+                    continue;
+
                 var completion = new CompletionItem();
                 completion.Label = name;
+                completion.SortText = sortValue.ToString("D8");
+                completion.FilterText = name.ToLower();
                 items.Add(completion);
+                sortValue++;
             }
 
             return new CompletionList(items);

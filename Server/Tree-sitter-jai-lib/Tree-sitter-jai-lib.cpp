@@ -70,6 +70,8 @@ static void SetupBuiltInFunctions()
 	for (int i = 0; i < builtins.size(); i++)
 	{
 		auto handle = file->AllocateType();
+
+		handle.scope = { 1 };
 		auto king = &file->types[handle.index];
 		king->name = std::string(builtins[i]);
 		ScopeDeclaration decl;
@@ -91,6 +93,8 @@ static void SetupBuiltInFunctions()
 
 	//file->loads.push_back(StringHash("preload.jai"));
 	file->scopeKings.push_back(scope);
+	file->scopeKings.push_back(Scope()); // empty scope for the types
+
 	FileScope::builtInScope = &file->scopeKings[0];
 	
 	FileScope::stringType = scope.TryGet(StringHash("string"))->type;
@@ -132,6 +136,7 @@ export_jai_lsp int Init()
 	g_constants.unaryExpression= ts_language_symbol_for_name(g_jaiLang, "unary_expression", (uint32_t)strlen("unary_expression"), true);
 	g_constants.pointerTo = ts_language_symbol_for_name(g_jaiLang, "pointer_to", (uint32_t)strlen("pointer_to"), true);
 	g_constants.arrayDecl = ts_language_symbol_for_name(g_jaiLang, "array_decl", (uint32_t)strlen("array_decl"), true);
+	g_constants.returnTypes = ts_language_symbol_for_name(g_jaiLang, "trailing_return_types", (uint32_t)strlen("trailing_return_types"), true);
 
 	//SetupBuiltInTypes();
 	SetupBuiltInFunctions();

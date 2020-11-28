@@ -271,7 +271,7 @@ struct FileScope
 		return TypeHandle{ .fileIndex = fileIndex, .index = static_cast<uint16_t>(types.size() - 1) };
 	}
 
-	const TypeKing* GetType(TypeHandle handle) const
+	TypeKing* GetType(TypeHandle handle)
 	{
 		assert(handle != TypeHandle::Null());
 

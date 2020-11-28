@@ -176,6 +176,7 @@ struct Constants
 	TSSymbol unaryExpression;
 	TSSymbol pointerTo;
 	TSSymbol arrayDecl;
+	TSSymbol returnTypes;
 
 };
 

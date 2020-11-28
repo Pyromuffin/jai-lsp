@@ -8,10 +8,7 @@ TypeHandle FileScope::floatType;
 Scope* FileScope::builtInScope;
 Hash FileScope::preloadHash;
 
-
-
 bool HandleLoad(Hash documentHash);
-
 
 TSNode ConstructRhsFromDecl(ScopeDeclaration decl, TSTree* tree)
 {
@@ -219,10 +216,12 @@ static std::optional<SemanticToken> HandleVariableReferenceFromScope(TSNode node
 	{
 		if (auto decl = scope->TryGet(hash))
 		{
+
 			// also we need to taken into account imperative scope order.
 			bool notImperative = !scope->imperative || decl->HasFlags(DeclarationFlags::Constant);
 			bool imperativeOrder = scope->imperative && decl->startByte <= ts_node_start_byte(node);
-			if ( notImperative || imperativeOrder  )
+			bool expressionType = decl->HasFlags(DeclarationFlags::Expression);
+			if ( (notImperative || imperativeOrder) && !expressionType )
 			{
 				token.type = GetTokenTypeFromFlags(decl->flags);
 				goto done;
@@ -280,7 +279,7 @@ static ScopeDeclaration AddUsingToScope(TSNode node, const GapBuffer* buffer, Sc
 	}
 
 
-	scope->Add({ 0 }, entry);
+	scope->Add(GetIdentifierHash(node, buffer), entry);
 	return entry;
 }
 
@@ -319,7 +318,6 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope,
 	rhs = { 0 };
 #endif
 
-	identifiers.clear();
 	cursor.Reset(nameNode);
 
 	// a bunch of things going on here
@@ -331,6 +329,7 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope,
 	do
 	{
 		auto node = cursor.Current();
+
 		if (ts_node_symbol(node) == g_constants.identifier)
 		{
 			identifiers.push_back(node);
@@ -346,6 +345,9 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope,
 
 	cursor.Parent(); // back to names node
 	cursor.Sibling(); // always a ":"
+	if (ts_node_has_error(cursor.Current()))
+		return;
+
 	cursor.Sibling(); // this is the hard part lol
 	auto node = cursor.Current();
 
@@ -632,7 +634,8 @@ void FileScope::HandleFunctionDefnitionParameters(TSNode node, ScopeHandle curre
 	while (cursor.Sibling()) // first call skips the "("
 	{
 		auto parameterNode = cursor.Current();
-		if (ts_node_symbol(parameterNode) == g_constants.parameter)
+		auto symbol = ts_node_symbol(parameterNode);
+		if (symbol == g_constants.parameter)
 		{
 			king->parameters.push_back(GetIdentifierFromBufferCopy(parameterNode, buffer));
 
@@ -665,8 +668,46 @@ void FileScope::HandleFunctionDefnitionParameters(TSNode node, ScopeHandle curre
 
 			cursor.Parent();
 		}
+		else if (symbol == g_constants.returnTypes)
+		{
+			
+			cursor.Child();
 
+			while (cursor.Sibling()) // first call skips the "("
+			{
+				auto parameterNode = cursor.Current();
+				auto symbol = ts_node_symbol(parameterNode);
+				if (symbol == g_constants.parameter)
+				{
+					//get identifier
+					cursor.Child();
+
+					DeclarationFlags flags = DeclarationFlags::Return;
+
+					auto identifierNode = cursor.Current();
+
+					if (cursor.Sibling()) // always ':', probably. it may be possible to have a weird thing here where we dont have an rhs
+					{
+						cursor.Sibling(); // rhs expression, could be expression, variable initializer single, const initializer single
+						auto rhsNode = cursor.Current();
+						AddEntryToScope(identifierNode, buffer, GetScope(currentScope), TypeHandle::Null(), flags, rhsNode);
+					}
+					else
+					{
+						AddUsingToScope(identifierNode, buffer, GetScope(currentScope), TypeHandle::Null(), flags);
+					}
+
+					cursor.Parent();
+				}
+			}
+
+			cursor.Parent();
+			
+		}
 	}
+
+
+
 
 	cursor.Parent(); // takes us to parameter list
 	cursor.Sibling(); // hopefully takes us to imperative scope
@@ -722,8 +763,8 @@ void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& export
 
 	file = AllocateScope(node, { UINT16_MAX }, false);
 	loads.push_back(StringHash("builtin"));
-	if(documentHash != preloadHash)
-		loads.push_back(preloadHash);
+	//if(documentHash != preloadHash)
+		//loads.push_back(preloadHash);
 
 
 	// uhhh just do all the imports now!
@@ -806,92 +847,71 @@ void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& export
 	ts_tree_cursor_delete(&cursor);
 }
 
-/*
+
 void FileScope::CheckScope(Scope* scope)
 {
-	std::vector<int> declarations;
-
 	auto size = scope->declarations.Size();
+
 	for (int i = 0; i < size; i++)
 	{
 		auto decl = scope->GetDeclFromIndex(i);
-		if (!decl->HasFlags(DeclarationFlags::Evaluated) || decl->HasFlags(DeclarationFlags::Using))
+
+		if (decl->HasFlags(DeclarationFlags::Expression))
 		{
-			declarations.push_back(i);
+			// probably do something here.
+
+
 		}
-	}
 
-	CheckDecls(declarations, scope);
-	scope->checked = true;
-}
-*/
-
-void FileScope::CheckScope(Scope* scope)
-{
-	//bool resolvedAtLeastOne = true;
-
-	//while (resolvedAtLeastOne && declIndices.size() > 0)
-	{
-		//resolvedAtLeastOne = false;
-		auto size = scope->declarations.Size();
-
-		for (int i = 0; i < size; i++)
+		if (!decl->HasFlags(DeclarationFlags::Evaluated))
 		{
-			auto decl = scope->GetDeclFromIndex(i);
+			auto node = ConstructRhsFromDecl(*decl, currentTree);
+
+			if (auto typeHandle = EvaluateNodeExpressionType(node, scope))
+			{
+				decl->type = *typeHandle;
+				decl->flags = decl->flags | DeclarationFlags::Evaluated;
+			}
+		}
+
+		// if this has usings, we need to inject them.
+		if (decl->HasFlags(DeclarationFlags::Evaluated | DeclarationFlags::Using))
+		{
+			// add members of type to scope.
+			auto typeHandle = decl->type;
+			auto memberFile = g_fileScopeByIndex.Read(typeHandle.fileIndex);
+			auto memberScope = memberFile->GetScope(typeHandle.scope);
+
+			// we probably need to make sure we don't have any circular dependencies in here.
+			if (!memberScope->checked)
+				memberFile->CheckScope(memberScope);
+
+			memberScope->InjectMembersTo(scope, decl->startByte);
+			size += memberScope->declarations.Size();
+
+			decl = scope->GetDeclFromIndex(i);
+			decl->flags = (DeclarationFlags)(decl->flags & (~DeclarationFlags::Using));
+			if (decl->HasFlags(DeclarationFlags::Expression))
+			{
+				decl->SetLength(0); // this is a hack so that this 'using' declaration doesn't show up in completions.
+				//decl->flags = (DeclarationFlags)(decl->flags & (~DeclarationFlags::Expression));
+			}
+		}
+
+			
+		
+		if (decl->HasFlags(DeclarationFlags::Return | DeclarationFlags::Evaluated))
+		{
+			auto king = GetType(scope->associatedType);
+			king->returnTypes.push_back(decl->type);
 
 			if (decl->HasFlags(DeclarationFlags::Expression))
 			{
-				// probably do something here.
-
-
-			}
-
-			if (!decl->HasFlags(DeclarationFlags::Evaluated))
-			{
-				auto node = ConstructRhsFromDecl(*decl, currentTree);
-
-				if (auto typeHandle = EvaluateNodeExpressionType(node, scope))
-				{
-					decl->type = *typeHandle;
-					decl->flags = decl->flags | DeclarationFlags::Evaluated;
-				}
-			}
-
-			// if this has usings, we need to inject them.
-			if (decl->HasFlags(DeclarationFlags::Evaluated | DeclarationFlags::Using))
-			{
-				// add members of type to scope.
-				auto typeHandle = decl->type;
-				auto memberFile = g_fileScopeByIndex.Read(typeHandle.fileIndex);
-				auto memberScope = memberFile->GetScope(typeHandle.scope);
-
-				// we probably need to make sure we don't have any circular dependencies in here.
-				if (!memberScope->checked)
-					memberFile->CheckScope(memberScope);
-
-				memberScope->InjectMembersTo(scope, decl->startByte);
-				size += memberScope->declarations.Size();
-
-				decl = scope->GetDeclFromIndex(i);
-				decl->flags = (DeclarationFlags)(decl->flags & (~DeclarationFlags::Using));
-				if (decl->HasFlags(DeclarationFlags::Expression))
-				{
-					decl->SetLength(0); // this is a hack so that this 'using' declaration doesn't show up in completions.
-					decl->flags = (DeclarationFlags)(decl->flags & (~DeclarationFlags::Expression));
-				}
-			}
-
-			//if( decl->HasFlags(DeclarationFlags::Evaluated) )
-			{
-				// it may be the case that we always remove this now? we evaluate rhs chains on demand and the order of the thing in the scope doesn't matter.
-				// erase swap back
-				//declIndices[i] = declIndices.back();
-				//declIndices.pop_back();
-				//i--;
-
-				//resolvedAtLeastOne = true;
+				decl->SetLength(0);
 			}
 		}
+		
+
 	}
 
 	scope->checked = true;
@@ -1413,8 +1433,23 @@ const std::optional<TypeHandle> FileScope::GetTypeFromSymbol(TSNode node, Scope*
 				return type;
 			}
 		}
-
 	}
+	else if (symbol == g_constants.functionCall)
+	{
+		auto functionName = ts_node_named_child(node, 0);
+		FileScope* declFile;
+		Scope* declScope;
+
+		auto declIndex = GetDeclarationForNodeFromScope(functionName, this, scope, &declFile, &declScope);
+		if (declIndex >= 0)
+		{
+			auto decl = declScope->GetDeclFromIndex(declIndex);
+			auto king = GetType(decl->type);
+			if(king->returnTypes.size() > 0)
+				return king->returnTypes[0];
+		}
+	}
+
 
 	return std::nullopt;
 }
@@ -1439,12 +1474,13 @@ const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode nod
 				auto decl = scope->GetDeclFromIndex(declIndex);
 				auto startByte = ts_node_start_byte(node);
 
-				if (!decl->HasFlags(DeclarationFlags::Constant) && scope->imperative && (decl->startByte > startByte))
+				auto notInImperativeOrder = !decl->HasFlags(DeclarationFlags::Constant) && scope->imperative && (decl->startByte > startByte);
+				auto expressionType = decl->HasFlags(DeclarationFlags::Expression); // this will be declaring the name of the thing in the same scope we're looking for the RHS, and that will cause an infinite loop.
+				if (notInImperativeOrder || expressionType)
 				{
 					scope = GetScope(scope->parent);
 					continue;
 				}
-
 
 				if (decl->flags & DeclarationFlags::Evaluated)
 				{
