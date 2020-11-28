@@ -425,13 +425,13 @@ static void GetAttributeText(std::string& dst, TypeHandle handle)
 
 	for (int i = 0; i < 8; i++)
 	{
-		auto attr = handle.GetAttribute(i);
+		auto attr = handle.GetAttribute(7 - i );
 		if (attr == TypeAttribute::none)
-			break;
+			continue;
 		else if (attr == TypeAttribute::pointerTo)
 			dst.append("*");
 		else if (attr == TypeAttribute::arrayOf)
-			dst.append("[]");
+			dst.append("[] ");
 	}
 
 	dst.append(king->name);
