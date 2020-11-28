@@ -282,12 +282,12 @@ LSP_TokenType GetTokenTypeFromFlags(DeclarationFlags flags)
 {
 	if ( (flags & DeclarationFlags::Enum) == DeclarationFlags::Enum)
 		return LSP_TokenType::Enum;
-	if (flags & DeclarationFlags::Constant)
-		return LSP_TokenType::Number;
 	if (flags & DeclarationFlags::Function)
 		return LSP_TokenType::Function;
 	if (flags & DeclarationFlags::Struct)
 		return LSP_TokenType::Type;
+	if (flags & DeclarationFlags::Constant)
+		return LSP_TokenType::Number;
 	//if (flags & DeclarationFlags::BuiltIn)
 	//	return LSP_TokenType::EnumMember;
 

@@ -201,9 +201,10 @@ void FileScope::HandleMemberReference(TSNode rhsNode, ScopeHandle scope)
 
 
 
-void FileScope::HandleVariableReference(TSNode node, ScopeHandle scopeHandle)
+
+static std::optional<SemanticToken> HandleVariableReferenceFromScope(TSNode node, Scope* scope, FileScope* file)
 {
-	auto hash = GetIdentifierHash(node, buffer);
+	auto hash = GetIdentifierHash(node, file->buffer);
 
 	auto start = ts_node_start_point(node);
 	auto end = ts_node_end_point(node);
@@ -214,30 +215,31 @@ void FileScope::HandleVariableReference(TSNode node, ScopeHandle scopeHandle)
 	token.modifier = (TokenModifier)0;
 
 
-	Scope* scope = GetScope(scopeHandle);
 	while (scope)
 	{
 		if (auto decl = scope->TryGet(hash))
 		{
 			// also we need to taken into account imperative scope order.
-			if (!scope->imperative || (scope->imperative && decl->startByte <= ts_node_start_byte(node)) )
+			bool notImperative = !scope->imperative || decl->HasFlags(DeclarationFlags::Constant);
+			bool imperativeOrder = scope->imperative && decl->startByte <= ts_node_start_byte(node);
+			if ( notImperative || imperativeOrder  )
 			{
 				token.type = GetTokenTypeFromFlags(decl->flags);
 				goto done;
 			}
 		}
 
-		scope = GetScope(scope->parent);
+		scope = file->GetScope(scope->parent);
 	}
 
-	if (builtInScope->TryGet(hash))
+	if (FileScope::builtInScope->TryGet(hash))
 	{
-		return;
+		return std::nullopt;
 	}
 
 
 	// search modules
-	if (auto decl = SearchModules(hash))
+	if (auto decl = file->SearchModules(hash))
 	{
 		token.type = GetTokenTypeFromFlags(decl->flags);
 		goto done;
@@ -246,7 +248,15 @@ void FileScope::HandleVariableReference(TSNode node, ScopeHandle scopeHandle)
 	token.type = (LSP_TokenType)-1;
 
 done:
-	tokens.push_back(token);
+	return token;
+}
+
+
+void FileScope::HandleVariableReference(TSNode node, ScopeHandle scopeHandle)
+{
+	Scope* scope = GetScope(scopeHandle);
+	if(auto token = HandleVariableReferenceFromScope(node, scope, this))
+		tokens.push_back(*token);
 }
 
 static ScopeDeclaration AddUsingToScope(TSNode node, const GapBuffer* buffer, Scope* scope, TypeHandle type, DeclarationFlags flags)
@@ -397,6 +407,8 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope,
 		else
 			flags = flags | DeclarationFlags::Struct;
 		
+		flags = flags | DeclarationFlags::Constant;
+
 		auto declarationNode = cursor.Current();
 		structs.push_back(declarationNode);
 
@@ -666,7 +678,7 @@ TypeHandle FileScope::HandleFuncDefinitionNode(TSNode node, ScopeHandle currentS
 {
 	// so all we need to do here is allocate a type, find the scope node, add the type king info members and name. params get injected and resolved when we go to find the members in the scope later.
 
-	flags = flags | DeclarationFlags::Function | DeclarationFlags::Evaluated;
+	flags = flags | DeclarationFlags::Function | DeclarationFlags::Evaluated | DeclarationFlags::Constant;
 
 	if (auto scopeHandle = GetScopeFromOffset(node.context[0], edits, editCount))
 	{
@@ -1016,6 +1028,7 @@ void FileScope::DoTokens2()
 		"(block_end) @block_end"
 		"(export_scope_directive) @export"
 		"(file_scope_directive) @file"
+		"(argument_name) @argument"
 		;
 
 	uint32_t error_offset;
@@ -1045,6 +1058,7 @@ void FileScope::DoTokens2()
 		block_end,
 		export_scope,
 		file_scope,
+		argument,
 	};
 
 	int identifiersToSkip = 0;
@@ -1127,6 +1141,31 @@ void FileScope::DoTokens2()
 		case ScopeMarker::member_rhs:
 		{
 			HandleMemberReference(node, stack.scopes.back());
+			identifiersToSkip++;
+			break;
+		}
+		case ScopeMarker::argument:
+		{
+			// we need to go up two nodes to get the function call
+			auto identifier = ts_node_named_child(node, 0);
+			auto func = ts_node_parent(ts_node_parent(node));
+			auto functionName = ts_node_named_child(func, 0);
+			FileScope* declFile;
+			Scope* declScope;
+
+			auto declIndex = GetDeclarationForNodeFromScope(functionName, this, GetScope(stack.scopes.back()), &declFile, &declScope);
+			if (declIndex >= 0)
+			{
+				auto decl = declScope->GetDeclFromIndex(declIndex);
+				auto members = declFile->GetScope(decl->type.scope);
+				if( auto token = HandleVariableReferenceFromScope(identifier, members, declFile) )
+					tokens.push_back(*token);
+			}
+			else
+			{
+				HandleVariableReference(identifier, stack.scopes.back());
+			}
+
 			identifiersToSkip++;
 			break;
 		}
@@ -1400,7 +1439,7 @@ const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode nod
 				auto decl = scope->GetDeclFromIndex(declIndex);
 				auto startByte = ts_node_start_byte(node);
 
-				if (scope->imperative && (decl->startByte > startByte))
+				if (!decl->HasFlags(DeclarationFlags::Constant) && scope->imperative && (decl->startByte > startByte))
 				{
 					scope = GetScope(scope->parent);
 					continue;

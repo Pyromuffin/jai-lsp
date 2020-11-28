@@ -193,6 +193,7 @@ Hash GetIdentifierHash(const TSNode& node, const GapBuffer* buffer);
 std::optional<ScopeHandle> GetScopeForNode(const TSNode node, FileScope* scope);
 bool GetScopeAndParentForNode(const TSNode& node, FileScope* scope, TSNode* outParentNode, ScopeHandle* handle);
 int GetDeclarationForNode(TSNode node, FileScope* fileScope, Scope* startingScope, FileScope** outFile, Scope** outScope);
+int GetDeclarationForNodeFromScope(TSNode node, FileScope* fileScope, Scope* scope, FileScope** outFile, Scope** outScope);
 const std::optional<TypeHandle> GetTypeForNode(TSNode node, FileScope* file);
 const TypeKing* GetType(TypeHandle handle);
 LSP_TokenType GetTokenTypeFromFlags(DeclarationFlags flags);

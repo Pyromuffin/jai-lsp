@@ -29,9 +29,12 @@ int GetDeclarationForNodeFromScope(TSNode node, FileScope* fileScope, Scope* sco
 			// if the scope is imperative, then respect ordering, if it is not, just get the decl.
 			if (scope->imperative)
 			{
-				auto definitionStart = scope->GetDeclFromIndex(declIndex)->startByte;
+				auto decl = scope->GetDeclFromIndex(declIndex);
+				auto constant = decl->HasFlags(DeclarationFlags::Constant);
+
+				auto definitionStart = decl->startByte;
 				auto identifierStart = ts_node_start_byte(node);
-				if (identifierStart >= definitionStart)
+				if (constant || (identifierStart >= definitionStart))
 				{
 					*outFile = fileScope;
 					*outScope = scope;
@@ -227,8 +230,16 @@ int GetDeclarationForNode(TSNode node, FileScope* fileScope, Scope* startingScop
 
 	// @TODO make sure this isn't broken
 	// this should probably? always be evalualted because this only runs in the tokens code.
-	return GetDeclarationForNodeFromScope(node, fileScope, startingScope, outFile, outScope);
-	
+	auto result = GetDeclarationForNodeFromScope(node, fileScope, startingScope, outFile, outScope);
+#if _DEBUG
+	if (result >= 0)
+	{
+		auto decl = (*outScope)->GetDeclFromIndex(result);
+		assert(decl->HasFlags(DeclarationFlags::Evaluated));
+	}
+#endif
+
+	return result;
 	/*
 	auto declIndex = GetDeclarationForNodeFromScope(node, fileScope, startingScope, outFile, outScope);
 	if (declIndex >= 0)

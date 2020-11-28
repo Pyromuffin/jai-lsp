@@ -96,6 +96,8 @@ struct FileScope
 	void HandleMemberReference(TSNode rhsNode, ScopeHandle scope);
 	void HandleVariableReference(TSNode node, ScopeHandle scopeHandle);
 
+	void HandleVariableReference(TSNode node, Scope* scope);
+
 	Scope* GetScope(ScopeHandle handle)
 	{
 		if (handle.index == UINT16_MAX)
