@@ -177,6 +177,8 @@ struct Constants
 	TSSymbol pointerTo;
 	TSSymbol arrayDecl;
 	TSSymbol returnTypes;
+	TSSymbol sourceFile;
+	TSSymbol forLoop;
 
 };
 

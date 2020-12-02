@@ -68,15 +68,13 @@ export_jai_lsp const char* GetCompletionItems(uint64_t hashValue, int row, int c
 	}
 
 
-	// for some reason, getting the file scope from that range query doesn't give back the same node id as the one we started with ?
-	// so in that case, we use context[0] == 2 AKA start byte == 2, becuase that is where the file scope byte offset is (for some reason again).
-	// i have no idea why it is also sometimes 0.
-	if (fileScope->ContainsScope(node.id) || node.context[0] == 2 || node.context[0] == 0)
+	bool sourceFile = ts_node_symbol(node) == g_constants.sourceFile;
+	if (fileScope->ContainsScope(node.id) || sourceFile)
 	{
 		// we've invoked this on some empty space in a scope, so lets just print out whatever is in scope up to this point.
 
 		ScopeHandle scopeHandle;
-		if (node.context[0] == 2 || node.context[0] == 0)
+		if (sourceFile)
 			scopeHandle = fileScope->file;
 		else
 			scopeHandle = fileScope->GetScopeFromNodeID(node.id);

@@ -65,6 +65,7 @@ static void SetupBuiltInFunctions()
 	g_fileScopes.Write(StringHash("builtin"), file);
 	g_fileScopeByIndex.Append(file);
 	file->file = { 0 };
+	file->status = FileScope::Status::checked;
 
 	Scope scope;
 	for (int i = 0; i < builtins.size(); i++)
@@ -137,6 +138,8 @@ export_jai_lsp int Init()
 	g_constants.pointerTo = ts_language_symbol_for_name(g_jaiLang, "pointer_to", (uint32_t)strlen("pointer_to"), true);
 	g_constants.arrayDecl = ts_language_symbol_for_name(g_jaiLang, "array_decl", (uint32_t)strlen("array_decl"), true);
 	g_constants.returnTypes = ts_language_symbol_for_name(g_jaiLang, "trailing_return_types", (uint32_t)strlen("trailing_return_types"), true);
+	g_constants.sourceFile = ts_language_symbol_for_name(g_jaiLang, "source_file", (uint32_t)strlen("source_file"), true);
+	g_constants.forLoop = ts_language_symbol_for_name(g_jaiLang, "for_loop", (uint32_t)strlen("for_loop"), true);
 
 	//SetupBuiltInTypes();
 	SetupBuiltInFunctions();

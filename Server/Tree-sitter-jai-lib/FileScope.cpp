@@ -441,6 +441,7 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope,
 			}
 		}
 	}
+
 	else
 	{
 		// unresolved type?
@@ -509,23 +510,30 @@ void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope,  bool& exp
 	auto cursor = Cursor();
 	cursor.Reset(scopeNode);
 	bool enumDecl = false;
+	auto scopeSymbol = ts_node_symbol(scopeNode);
 
-	if (ts_node_symbol(scopeNode) == g_constants.funcDefinition)
+	if (scopeSymbol == g_constants.funcDefinition)
 	{
 		HandleFunctionDefnitionParameters(scopeNode, scope, cursor);
 	}
-	else if (ts_node_symbol(scopeNode) == g_constants.enumDecl)
+	else if (scopeSymbol == g_constants.enumDecl)
 	{
 		enumDecl = true;
 		cursor.Child(); // inside enum
 		while (cursor.Sibling()); // should be the data scope.
 	}
-	else if (ts_node_symbol(scopeNode) == g_constants.structDecl)
+	else if (scopeSymbol == g_constants.structDecl)
 	{
 		cursor.Child(); // inside enum
 		while (cursor.Sibling()); // should be the data scope.
 	}
+	else if (scopeSymbol == g_constants.forLoop)
+	{
+		// @TODO handle iterator declarations 
 
+		cursor.Child(); // range
+		while(cursor.Sibling()); // imperative scope or statement !
+	}
 
 
 	cursor.Child(); // inside the scope
@@ -550,7 +558,11 @@ void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope,  bool& exp
 			AllocateScope(node, scope, true);
 			structs.push_back(node);
 		}
-
+		else if (type == g_constants.forLoop)
+		{
+			AllocateScope(node, scope, true);
+			structs.push_back(node);
+		}
 		else if (type == g_constants.scopeExport)
 			exporting = true;
 
@@ -1040,6 +1052,7 @@ void FileScope::DoTokens2()
 
 	static const auto queryText =
 		"(function_definition) @func_defn" // hopefully this matches before the identifiers does.
+		"(for_loop) @func_defn"			   // not really a function definition but it shares the same structure
 		"(imperative_scope) @imperative.scope"
 		"(struct_definition) @data.scope"
 		"(enum_definition) @data.scope"
@@ -1232,11 +1245,12 @@ void FileScope::DoTokens2()
 }
 
 
-
+/*
 void FileScope::DoTokens(TSNode root, TSInputEdit* edits, int editCount)
 {
 	const static auto queryText =
 		"(function_definition) @func_defn" // hopefully this matches before the identifiers does.
+		"(for_loop) @func_defn"			   // this is not actually a func definition but it does have the same structure.
 		"(imperative_scope) @imperative.scope"
 		"(data_scope) @data.scope"
 		"(member_access . (_) (_) @member_rhs )"
@@ -1389,7 +1403,7 @@ void FileScope::DoTokens(TSNode root, TSInputEdit* edits, int editCount)
 
 	ts_query_delete(query);
 }
-
+*/
 
 const std::optional<TypeHandle> FileScope::GetTypeFromSymbol(TSNode node, Scope* scope, TSSymbol symbol)
 {
@@ -1560,6 +1574,7 @@ const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode nod
 
 void FileScope::RebuildScope(TSNode newScopeNode, TSInputEdit* edits, int editCount, TSNode root)
 {
+	/*
 	this->edits = edits;
 	this->editCount = editCount;
 
@@ -1669,6 +1684,7 @@ void FileScope::RebuildScope(TSNode newScopeNode, TSInputEdit* edits, int editCo
 
 
 	}
+	*/
 }
 
 
