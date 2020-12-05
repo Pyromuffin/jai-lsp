@@ -24,8 +24,8 @@ This is a language server for the jai language. The goal is to provide the follo
 4) code completion
      * top level definitions: mostly working
      * member access:         mostly working
-     * using statement:       not started
-     * parameters:            not started
+     * using statement:       mostly working (!)
+     * parameters:            mostly working - named returns don't work
   
 
 
