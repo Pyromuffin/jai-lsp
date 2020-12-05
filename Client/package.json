@@ -17,6 +17,7 @@
     "main": "./out/src/extension",
     "enableProposedApi": true,
     "contributes": {
+        "breakpoints": [{ "language": "jai" }],
         "configuration": {
             "type": "object",
             "title": "jai lsp config",
