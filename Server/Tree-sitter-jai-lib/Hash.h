@@ -1,6 +1,6 @@
 #pragma once
 
-#define HASH_DEBUG_STRING 1
+#define HASH_DEBUG_STRING 0
 
 
 

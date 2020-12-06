@@ -140,6 +140,8 @@ export_jai_lsp int Init()
 	g_constants.returnTypes = ts_language_symbol_for_name(g_jaiLang, "trailing_return_types", (uint32_t)strlen("trailing_return_types"), true);
 	g_constants.sourceFile = ts_language_symbol_for_name(g_jaiLang, "source_file", (uint32_t)strlen("source_file"), true);
 	g_constants.forLoop = ts_language_symbol_for_name(g_jaiLang, "for_loop", (uint32_t)strlen("for_loop"), true);
+	g_constants.ifStatement = ts_language_symbol_for_name(g_jaiLang, "if_statement", (uint32_t)strlen("if_statement"), true);
+	g_constants.elseStatement = ts_language_symbol_for_name(g_jaiLang, "else_statement", (uint32_t)strlen("else_statement"), true);
 
 	//SetupBuiltInTypes();
 	SetupBuiltInFunctions();

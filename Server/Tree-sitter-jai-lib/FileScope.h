@@ -284,6 +284,8 @@ struct FileScope
 
 	void HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope, std::vector<TSNode>& structs, bool exporting, bool usingFlag = false);
 	void HandleUsingStatement(TSNode node, ScopeHandle scope, std::vector<TSNode>& structs, bool& exporting);
+	void HandleForLoop(TSNode scopeNode, ScopeHandle scope, Cursor& cursor);
+	void HandleIfStatement(ScopeHandle scope, Cursor& cursor, std::vector<TSNode>& structs);
 	void FindDeclarations(TSNode scopeNode, ScopeHandle scope, bool& exporting, bool rebuild = false);
 	void HandleFunctionDefnitionParameters(TSNode node, ScopeHandle currentScope, Cursor& cursor);
 	TypeHandle HandleFuncDefinitionNode(TSNode node, ScopeHandle currentScope, std::vector<TSNode>& structs, DeclarationFlags& flags);

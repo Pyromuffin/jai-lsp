@@ -479,6 +479,134 @@ void FileScope::HandleUsingStatement(TSNode node, ScopeHandle scope, std::vector
 
 }
 
+void FileScope::HandleForLoop(TSNode scopeNode, ScopeHandle scopeHandle, Cursor& cursor)
+{
+	static auto itHash = StringHash("it");
+	static auto it_indexHash = StringHash("it_index");
+
+	// so first find out if we have declared any iterators, and if not then add 
+	cursor.Child(); // for token
+	cursor.Sibling(); // range
+
+	auto symbol = cursor.Symbol();
+	if (symbol == g_constants.identifier) // then this is an iterator declaration
+	{
+		auto node = cursor.Current();
+		auto scope = GetScope(scopeHandle);
+		cursor.Sibling(); // : token or , token
+		cursor.Sibling(); // range declaration or identifier
+
+		auto secondDecl = cursor.Current();
+		if (ts_node_symbol(secondDecl) == g_constants.identifier)
+		{
+			// this is the index declaration
+			cursor.Sibling(); // : token
+			cursor.Sibling(); // range
+
+			cursor.Child(); // this is probably an identifier now
+			auto rhsNode = cursor.Current();
+			AddEntryToScope(node, buffer, scope, TypeHandle::Null(), DeclarationFlags::Iterator, rhsNode);
+			AddEntryToScope(secondDecl, buffer, scope, intType, DeclarationFlags::Evaluated, { 0 });
+		}
+		else
+		{
+			cursor.Child(); // this is probably an identifier now
+			auto rhsNode = cursor.Current();
+			AddEntryToScope(node, buffer, scope, TypeHandle::Null(), DeclarationFlags::Iterator, rhsNode);
+
+			ScopeDeclaration itIndexDecl;
+			itIndexDecl.startByte = scopeNode.context[0];
+			itIndexDecl.flags = DeclarationFlags::Evaluated;
+			itIndexDecl.type = intType;
+			itIndexDecl.SetLength(0);
+			scope->Add(it_indexHash, itIndexDecl);
+		}
+		cursor.Parent();
+	}
+	else // probably a range declaration ??
+	{
+		cursor.Child(); // this is probably an identifier now
+		// find the type of the identifier ??
+
+		auto rhsNode = cursor.Current();
+
+		// add two special entries to the sccope, it and it_index
+		auto scope = GetScope(scopeHandle);
+
+		// maybe these can be constant hashes?
+		ScopeDeclaration itDecl;
+		ScopeDeclaration itIndexDecl;
+
+		itDecl.startByte = scopeNode.context[0];
+		itDecl.SetLength(0);
+		itDecl.flags = DeclarationFlags::Iterator;
+
+		auto offset = rhsNode.context[0] - itDecl.startByte;
+		itDecl.SetRHSOffset(offset);
+		itDecl.id = rhsNode.id;
+
+		itIndexDecl.startByte = scopeNode.context[0];
+		itIndexDecl.flags = DeclarationFlags::Evaluated;
+		itIndexDecl.type = intType;
+		itIndexDecl.SetLength(0);
+
+		scope->Add(itHash, itDecl);
+		scope->Add(it_indexHash, itIndexDecl);
+
+		cursor.Parent();
+	}
+
+
+	while (cursor.Sibling()); // imperative scope or statement !
+}
+
+void FileScope::HandleIfStatement(ScopeHandle scope, Cursor& cursor, std::vector<TSNode>& structs)
+{
+	/*
+	if_statement: $ = > prec.left(seq(
+	"if",
+	$._expression,
+	optional("then"),
+	$._statement,
+	optional($.else_statement),
+	)),
+
+	else_statement: $ = > seq(
+		"else",
+		$._statement
+	),
+	*/
+
+	cursor.Child(); // if token
+	cursor.Sibling(); // condition
+	cursor.Sibling(); // statment or "then"
+	auto node = cursor.Current();
+	if (!ts_node_is_named(node))
+	{
+		// it was a "then" keyword.
+		cursor.Sibling(); // statement 
+
+	}
+
+	AllocateScope(node, scope, true);
+	structs.push_back(node);
+
+	// then find the else statement if it exists
+	if (cursor.Sibling()) // else statement
+	{
+		cursor.Child(); // else token
+		cursor.Sibling(); // statement
+
+		auto node = cursor.Current();
+		AllocateScope(node, scope, true);
+		structs.push_back(node);
+
+		cursor.Parent();
+	}
+
+
+	cursor.Parent();
+}
 
 
 void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope,  bool& exporting, bool rebuild)
@@ -529,11 +657,11 @@ void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope,  bool& exp
 	}
 	else if (scopeSymbol == g_constants.forLoop)
 	{
-		// @TODO handle iterator declarations 
+		
+		HandleForLoop(scopeNode, scope, cursor);
 
-		cursor.Child(); // range
-		while(cursor.Sibling()); // imperative scope or statement !
 	}
+
 
 
 	cursor.Child(); // inside the scope
@@ -574,7 +702,16 @@ void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope,  bool& exp
 			auto scopePtr = GetScope(scope);
 			AddEntryToScope(node, buffer, scopePtr, scopePtr->associatedType, DeclarationFlags::Evaluated | DeclarationFlags::Constant, { 0 });
 		}
-
+		else if (type == g_constants.ifStatement)
+		{
+			_nodeToScopes.insert(std::make_pair(node.id, scope));
+			structs.push_back(node);
+		}
+		else if (type == g_constants.elseStatement)
+		{
+			_nodeToScopes.insert(std::make_pair(node.id, scope));
+			structs.push_back(node);
+		}
 
 	} while (cursor.Sibling());
 
@@ -923,6 +1060,12 @@ void FileScope::CheckScope(Scope* scope)
 			}
 		}
 		
+		if (decl->HasFlags(DeclarationFlags::Iterator | DeclarationFlags::Evaluated)) 
+		{
+			// if this is an iterator, then we want to dereference the type.
+			bool valid = decl->type.Dereference();
+			//assert(valid);
+		}
 
 	}
 
@@ -1458,6 +1601,11 @@ const std::optional<TypeHandle> FileScope::GetTypeFromSymbol(TSNode node, Scope*
 		if (declIndex >= 0)
 		{
 			auto decl = declScope->GetDeclFromIndex(declIndex);
+			// and check the scope of the function's type, to infer returns
+			auto funcScope = declFile->GetScope(decl->type.scope);
+			if (!funcScope->checked)
+				declFile->CheckScope(funcScope);
+
 			auto king = GetType(decl->type);
 			if(king->returnTypes.size() > 0)
 				return king->returnTypes[0];

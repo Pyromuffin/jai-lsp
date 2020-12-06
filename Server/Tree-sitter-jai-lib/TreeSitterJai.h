@@ -179,6 +179,8 @@ struct Constants
 	TSSymbol returnTypes;
 	TSSymbol sourceFile;
 	TSSymbol forLoop;
+	TSSymbol ifStatement;
+	TSSymbol elseStatement;
 
 };
 

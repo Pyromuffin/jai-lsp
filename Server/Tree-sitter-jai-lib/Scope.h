@@ -9,22 +9,22 @@
 #include "GapBuffer.h"
 
 
-enum DeclarationFlags : uint8_t
+enum DeclarationFlags : uint16_t
 {
 	None = 0,
 	Struct = 1 << 0,
 	Function = 1 << 1,
-
-	//Struct = TypeFlag0,
 	Enum = Struct | Function,
-	//Function = TypeFlag1,
 
 	Return = 1 << 2,
 	Exported = 1 << 3,
-	Expression =  1 << 4,
+	Expression = 1 << 4,
 	Constant = 1 << 5,
 	Using = 1 << 6,
 	Evaluated = 1 << 7,
+
+	Iterator = 1 << 8,
+
 };
 
 struct ScopeHandle
@@ -83,6 +83,24 @@ struct TypeHandle
 		return false;
 	}
 
+	bool Dereference()
+	{
+		if (attributes == 0)
+			return false;
+
+		for (int i = 0; i < 8; i++)
+		{
+			auto shifted = attributes >> (i * 2);
+			auto masked = shifted & 0b11;
+			TypeAttribute ta = (TypeAttribute)masked;
+			if (ta == TypeAttribute::none)
+			{
+				attributes &= ~((uint16_t)0b11 << ((i-1) * 2));
+				return true;
+			}
+		}
+	}
+
 };
 
 struct TypeKing
@@ -103,18 +121,17 @@ inline DeclarationFlags operator|(DeclarationFlags a, DeclarationFlags b)
 struct ScopeDeclaration
 {
 	// we need to find somewhere to put the RHS offset from the start byte.
-
-	uint32_t startByte;
-	DeclarationFlags flags;
+	uint32_t startByte : 24; // 16 mb files seem reasonable....
 
 private:
-	uint8_t length;
-	uint8_t rhsOffset;
-	uint8_t fourForEach;
-
+	uint32_t fourForEach : 8;
+	uint8_t length;		
+	uint8_t rhsOffset;		
 public:
+	DeclarationFlags flags; 
+
 	union {
-		TypeHandle type;
+		TypeHandle type;	
 		const void* id;
 	};
 
@@ -143,6 +160,8 @@ class Scopemap
 	};
 
 	kvp* map = nullptr;
+
+	static constexpr auto slotSize = sizeof(kvp);
 
 public:
 	void Add(Hash key, ScopeDeclaration value);
