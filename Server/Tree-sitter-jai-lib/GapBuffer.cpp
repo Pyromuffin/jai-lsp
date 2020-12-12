@@ -130,8 +130,8 @@ void GapBuffer::InsertAtCursor(const char* content, int length)
 
 GapBuffer::GapBuffer(const char* initialContent, int length)
 {
-    before.resize(std::max(length, 1));
-    memcpy(&before[0], initialContent, length);
+    before.resize(length); 
+    memcpy(before.data(), initialContent, length);
     
     // seek end:
     for (int i = 0; i < length; i++)
@@ -160,7 +160,7 @@ std::string_view GapBuffer::GetStringView(int start, int length)
 std::string_view GapBuffer::GetEntireStringView()
 {
     assert(IsRewound());
-    auto view = std::string_view(&before[0], before.size());
+    auto view = std::string_view(before.data(), before.size());
     return view;
 }
 
