@@ -181,6 +181,7 @@ struct Constants
 	TSSymbol forLoop;
 	TSSymbol ifStatement;
 	TSSymbol elseStatement;
+	TSSymbol whileLoop;
 
 };
 

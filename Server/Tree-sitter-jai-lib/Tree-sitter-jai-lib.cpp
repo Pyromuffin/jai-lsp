@@ -142,6 +142,7 @@ export_jai_lsp int Init()
 	g_constants.forLoop = ts_language_symbol_for_name(g_jaiLang, "for_loop", (uint32_t)strlen("for_loop"), true);
 	g_constants.ifStatement = ts_language_symbol_for_name(g_jaiLang, "if_statement", (uint32_t)strlen("if_statement"), true);
 	g_constants.elseStatement = ts_language_symbol_for_name(g_jaiLang, "else_statement", (uint32_t)strlen("else_statement"), true);
+	g_constants.whileLoop = ts_language_symbol_for_name(g_jaiLang, "while_loop", (uint32_t)strlen("while_loop"), true);
 
 	//SetupBuiltInTypes();
 	SetupBuiltInFunctions();

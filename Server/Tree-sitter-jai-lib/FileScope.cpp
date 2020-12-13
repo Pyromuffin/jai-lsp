@@ -702,12 +702,7 @@ void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope,  bool& exp
 			auto scopePtr = GetScope(scope);
 			AddEntryToScope(node, buffer, scopePtr, scopePtr->associatedType, DeclarationFlags::Evaluated | DeclarationFlags::Constant, { 0 });
 		}
-		else if (type == g_constants.ifStatement)
-		{
-			_nodeToScopes.insert(std::make_pair(node.id, scope));
-			structs.push_back(node);
-		}
-		else if (type == g_constants.elseStatement)
+		else if (type == g_constants.ifStatement || type == g_constants.ifStatement || type == g_constants.whileLoop)
 		{
 			_nodeToScopes.insert(std::make_pair(node.id, scope));
 			structs.push_back(node);
