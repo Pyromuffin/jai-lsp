@@ -91,6 +91,7 @@ static void SetupBuiltInFunctions()
 
 	scope.Add(StringHash("true"), boolDecl);
 	scope.Add(StringHash("false"), boolDecl);
+	scope.Add(StringHash("null"), boolDecl);
 
 	//file->loads.push_back(StringHash("preload.jai"));
 	file->scopeKings.push_back(scope);

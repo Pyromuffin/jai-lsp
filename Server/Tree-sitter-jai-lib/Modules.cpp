@@ -84,7 +84,7 @@ bool ModuleFileExists(std::string name)
 
 
 
-std::optional<std::filesystem::path> ModuleFilePath(std::string name)
+std::optional<std::filesystem::path> FindModuleFilePath(std::string name)
 {
 	auto modulePathCount = g_modulePaths.size();
 	assert(modulePathCount > 0);
@@ -95,12 +95,22 @@ std::optional<std::filesystem::path> ModuleFilePath(std::string name)
 	for (int i = 0; i < modulePathCount; i++)
 	{
 		auto path = std::filesystem::path(g_modulePaths.Read(i));
-		path = path.append(name);
-		path = path.append("module.jai");
+		
+		auto modulePath = path;
+		modulePath.append(name);
+		modulePath. append("module.jai");
+		
+		auto filePath = path;
+		filePath.append(name + ".jai");
 
-		if (std::filesystem::exists(path))
+
+		if (std::filesystem::exists(modulePath))
 		{
-			return path;
+			return modulePath;
+		}
+		else if( std::filesystem::exists(filePath))
+		{
+			return filePath;
 		}
 	}
 

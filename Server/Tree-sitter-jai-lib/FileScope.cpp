@@ -652,7 +652,7 @@ void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope,  bool& exp
 	}
 	else if (scopeSymbol == g_constants.structDecl)
 	{
-		cursor.Child(); // inside enum
+		cursor.Child(); // inside struct
 		while (cursor.Sibling()); // should be the data scope.
 	}
 	else if (scopeSymbol == g_constants.forLoop)
@@ -702,15 +702,13 @@ void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope,  bool& exp
 			auto scopePtr = GetScope(scope);
 			AddEntryToScope(node, buffer, scopePtr, scopePtr->associatedType, DeclarationFlags::Evaluated | DeclarationFlags::Constant, { 0 });
 		}
-		else if (type == g_constants.ifStatement || type == g_constants.ifStatement || type == g_constants.whileLoop)
+		else if (type == g_constants.ifStatement || type == g_constants.elseStatement || type == g_constants.whileLoop)
 		{
 			_nodeToScopes.insert(std::make_pair(node.id, scope));
 			structs.push_back(node);
 		}
 
 	} while (cursor.Sibling());
-
-
 
 
 
@@ -890,7 +888,7 @@ TypeHandle FileScope::HandleFuncDefinitionNode(TSNode node, ScopeHandle currentS
 
 
 Module* RegisterModule(std::string moduleName, std::filesystem::path path);
-std::optional<std::filesystem::path> ModuleFilePath(std::string name);
+std::optional<std::filesystem::path> FindModuleFilePath(std::string name);
 
 
 
@@ -902,7 +900,6 @@ void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& export
 	auto builtinScopeHandle = AllocateScope({ 0 }, { UINT16_MAX }, false);
 	auto builtinScope = GetScope(builtinScopeHandle);
 	InitBuiltinScope(builtinScope, this);
-	
 	*/
 
 	file = AllocateScope(node, { UINT16_MAX }, false);
@@ -916,7 +913,6 @@ void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& export
 	auto cursor = ts_tree_cursor_new(node);
 	if (ts_tree_cursor_goto_first_child(&cursor))
 	{
-		//non empty tree:
 		do
 		{
 			// this doesn't respect namespaces;
@@ -938,7 +934,7 @@ void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& export
 				else
 				{
 					auto moduleName = view.Copy();
-					if (auto modulePath = ModuleFilePath(moduleName))
+					if (auto modulePath = FindModuleFilePath(moduleName))
 					{
 						// then we need to create the module.
 						auto mod = RegisterModule(moduleName, *modulePath);
