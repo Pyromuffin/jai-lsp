@@ -81,6 +81,10 @@ static void SetupBuiltInFunctions()
 		scope.Add(StringHash(builtins[i]), decl);
 	}
 
+	auto emptyTypeHandle = file->AllocateType();
+	auto emptyKing = &file->types[emptyTypeHandle.index];
+	emptyKing->name = "";
+
 	auto boolType = scope.TryGet(StringHash("bool"))->type;
 
 	ScopeDeclaration boolDecl;
@@ -89,9 +93,15 @@ static void SetupBuiltInFunctions()
 	boolDecl.SetLength(0);
 	boolDecl.type = boolType;
 
+	ScopeDeclaration emptyDecl;
+	emptyDecl.flags = DeclarationFlags::Evaluated | DeclarationFlags::Exported;
+	emptyDecl.startByte = 0;
+	emptyDecl.SetLength(0);
+	emptyDecl.type = emptyTypeHandle;
+
 	scope.Add(StringHash("true"), boolDecl);
 	scope.Add(StringHash("false"), boolDecl);
-	scope.Add(StringHash("null"), boolDecl);
+	scope.Add(StringHash("null"), emptyDecl);
 
 	//file->loads.push_back(StringHash("preload.jai"));
 	file->scopeKings.push_back(scope);
@@ -102,7 +112,7 @@ static void SetupBuiltInFunctions()
 	FileScope::stringType = scope.TryGet(StringHash("string"))->type;
 	FileScope::intType = scope.TryGet(StringHash("int"))->type;
 	FileScope::floatType = scope.TryGet(StringHash("float"))->type;
-
+	FileScope::emptyType = emptyTypeHandle;
 }
 
 export_jai_lsp int Init()
@@ -111,7 +121,7 @@ export_jai_lsp int Init()
 
 	g_constants.constDecl = ts_language_symbol_for_name(g_jaiLang, "const_initializer", (uint32_t)strlen("const_initializer"), true);
 	g_constants.varDecl = ts_language_symbol_for_name(g_jaiLang, "variable_initializer", (uint32_t)strlen("variable_initializer"), true);
-	g_constants.import = ts_language_symbol_for_name(g_jaiLang, "import_statement", (uint32_t)strlen("import_statement"), true);
+	g_constants.import = ts_language_symbol_for_name(g_jaiLang, "import_expression", (uint32_t)strlen("import_expression"), true);
 	g_constants.funcDefinition = ts_language_symbol_for_name(g_jaiLang, "function_definition", (uint32_t)strlen("function_definition"), true);
 	g_constants.structDecl = ts_language_symbol_for_name(g_jaiLang, "struct_definition", (uint32_t)strlen("struct_definition"), true);
 	g_constants.memberAccess = ts_language_symbol_for_name(g_jaiLang, "member_access", (uint32_t)strlen("member_access"), true);

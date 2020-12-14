@@ -40,6 +40,7 @@ struct FileScope
 	static TypeHandle intType;
 	static TypeHandle stringType;
 	static TypeHandle floatType;
+	static TypeHandle emptyType;
 	static Scope* builtInScope;
 	static Hash preloadHash;
 
@@ -282,6 +283,7 @@ struct FileScope
 	}
 
 
+	void HandleNamespaceImport(TSNode node, Cursor& cursor, TypeHandle& handle, DeclarationFlags& flags);
 	void HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope, std::vector<TSNode>& structs, bool exporting, bool usingFlag = false);
 	void HandleUsingStatement(TSNode node, ScopeHandle scope, std::vector<TSNode>& structs, bool& exporting);
 	void HandleForLoop(TSNode scopeNode, ScopeHandle scope, Cursor& cursor);
@@ -289,6 +291,8 @@ struct FileScope
 	void FindDeclarations(TSNode scopeNode, ScopeHandle scope, bool& exporting, bool rebuild = false);
 	void HandleFunctionDefnitionParameters(TSNode node, ScopeHandle currentScope, Cursor& cursor);
 	TypeHandle HandleFuncDefinitionNode(TSNode node, ScopeHandle currentScope, std::vector<TSNode>& structs, DeclarationFlags& flags);
+	void HandleImportNode(TSNode node);
+	void HandleLoadNode(TSNode node);
 	void CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& exporting);
 	void CheckScope(Scope* scope);
 	void DoTypeCheckingAndInference(TSTree* tree);

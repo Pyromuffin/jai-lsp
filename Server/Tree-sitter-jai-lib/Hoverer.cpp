@@ -70,40 +70,42 @@ int EvaluateMemberAccess(TSNode node, FileScope* fileScope, Scope* scope, Scope*
 
 	auto lhs = ts_node_named_child(node, 0);
 	auto lhsSymbol = ts_node_symbol(lhs);
-	ScopeDeclaration* lhsType = nullptr;
+	ScopeDeclaration* lhsDecl = nullptr;
 	int declIndex = -1;
 
 	if (IsMemberAccess(lhsSymbol))
 	{
 		declIndex = EvaluateMemberAccess(lhs, fileScope, scope, outScope, outFile);
 		if (declIndex >= 0)
-			lhsType = (*outScope)->GetDeclFromIndex(declIndex);
+			lhsDecl = (*outScope)->GetDeclFromIndex(declIndex);
 	}
 	else
 	{
 		declIndex = GetDeclarationForNodeFromScope(lhs, fileScope, scope, outFile, outScope);
 		if (declIndex >= 0)
-			lhsType = (*outScope)->GetDeclFromIndex(declIndex);
+			lhsDecl = (*outScope)->GetDeclFromIndex(declIndex);
 	}
 
-	if (!lhsType)
+	if (!lhsDecl)
 		return -1;
 
-	if ( !lhsType->HasFlags(DeclarationFlags::Evaluated) )
+	if ( !lhsDecl->HasFlags(DeclarationFlags::Evaluated) )
 	{
 		// so we need to get the file scope for this declaration as well
 
-		auto rhsNode = ConstructRhsFromDecl(*lhsType, (*outFile)->currentTree);
+		auto rhsNode = ConstructRhsFromDecl(*lhsDecl, (*outFile)->currentTree);
 		if (auto typeHandle = (*outFile)->EvaluateNodeExpressionType(rhsNode, *outScope))
 		{
-			lhsType->type = *typeHandle;
-			lhsType->flags = lhsType->flags | DeclarationFlags::Evaluated;
+			lhsDecl->type = *typeHandle;
+			lhsDecl->flags = lhsDecl->flags | DeclarationFlags::Evaluated;
 		}
 		else
 		{
 			return -1;
 		}
 	}
+
+
 
 	if (ts_node_symbol(node) == g_constants.memberAccessNothing)
 		return declIndex;
@@ -113,8 +115,8 @@ int EvaluateMemberAccess(TSNode node, FileScope* fileScope, Scope* scope, Scope*
 
 	// search for rhs in the members of the LHS type
 
-	auto file = g_fileScopeByIndex.Read(lhsType->type.fileIndex);
-	auto members = file->GetScope(lhsType->type.scope);
+	auto file = g_fileScopeByIndex.Read(lhsDecl->type.fileIndex);
+	auto members = file->GetScope(lhsDecl->type.scope);
 	if (!members->checked)
 	{
 		file->CheckScope(members);
@@ -132,7 +134,7 @@ int EvaluateMemberAccess(TSNode node, FileScope* fileScope, Scope* scope, Scope*
 }
 
 
-static std::optional<TypeHandle> EvaluateMemberAccessType(TSNode node, FileScope* fileScope, Scope* scope)
+std::optional<TypeHandle> EvaluateMemberAccessType(TSNode node, FileScope* fileScope, Scope* scope)
 {
 	auto lhs = ts_node_named_child(node, 0);
 	auto lhsSymbol = ts_node_symbol(lhs);

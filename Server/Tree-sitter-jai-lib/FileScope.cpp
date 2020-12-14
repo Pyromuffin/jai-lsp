@@ -5,10 +5,16 @@
 TypeHandle FileScope::intType;
 TypeHandle FileScope::stringType;
 TypeHandle FileScope::floatType;
+TypeHandle FileScope::emptyType;
+
 Scope* FileScope::builtInScope;
 Hash FileScope::preloadHash;
 
 bool HandleLoad(Hash documentHash);
+Module* RegisterModule(std::string moduleName, std::filesystem::path path);
+std::optional<std::filesystem::path> FindModuleFilePath(std::string name);
+std::optional<TypeHandle> EvaluateMemberAccessType(TSNode node, FileScope* fileScope, Scope* scope);
+
 
 TSNode ConstructRhsFromDecl(ScopeDeclaration decl, TSTree* tree)
 {
@@ -166,97 +172,7 @@ static const TypeKing* GetGlobalType(TypeHandle handle)
 	return g_fileScopeByIndex.Read(handle.fileIndex)->GetType(handle);
 }
 
-void FileScope::HandleMemberReference(TSNode rhsNode, ScopeHandle scope)
-{
-	auto rhsHash = GetIdentifierHash(rhsNode, buffer);
 
-	auto start = ts_node_start_point(rhsNode);
-	auto end = ts_node_end_point(rhsNode);
-	SemanticToken token;
-	token.col = start.column;
-	token.line = start.row;
-	token.length = end.column - start.column;
-	token.modifier = (TokenModifier)0;
-
-	FileScope* declFile;
-	Scope* declScope;
-	auto declIndex = GetDeclarationForNode(rhsNode, this, GetScope(scope), &declFile, &declScope); // this should probably use the scope stack for better performance
-	if (declIndex >= 0)
-	{
-		token.type = GetTokenTypeFromFlags(declScope->GetDeclFromIndex(declIndex)->flags);
-		tokens.push_back(token);
-		return;
-	}
-
-	// if we get here then we've got an unresolved identifier, that we will check when we've parsed the entire document.
-	token.type = (LSP_TokenType)-1;
-
-	tokens.push_back(token);
-	return;
-
-}
-
-
-
-
-static std::optional<SemanticToken> HandleVariableReferenceFromScope(TSNode node, Scope* scope, FileScope* file)
-{
-	auto hash = GetIdentifierHash(node, file->buffer);
-
-	auto start = ts_node_start_point(node);
-	auto end = ts_node_end_point(node);
-	SemanticToken token;
-	token.col = start.column;
-	token.line = start.row;
-	token.length = end.column - start.column;
-	token.modifier = (TokenModifier)0;
-
-
-	while (scope)
-	{
-		if (auto decl = scope->TryGet(hash))
-		{
-
-			// also we need to taken into account imperative scope order.
-			bool notImperative = !scope->imperative || decl->HasFlags(DeclarationFlags::Constant);
-			bool imperativeOrder = scope->imperative && decl->startByte <= ts_node_start_byte(node);
-			bool expressionType = decl->HasFlags(DeclarationFlags::Expression);
-			if ( (notImperative || imperativeOrder) && !expressionType )
-			{
-				token.type = GetTokenTypeFromFlags(decl->flags);
-				goto done;
-			}
-		}
-
-		scope = file->GetScope(scope->parent);
-	}
-
-	if (FileScope::builtInScope->TryGet(hash))
-	{
-		return std::nullopt;
-	}
-
-
-	// search modules
-	if (auto decl = file->SearchModules(hash))
-	{
-		token.type = GetTokenTypeFromFlags(decl->flags);
-		goto done;
-	}
-
-	token.type = (LSP_TokenType)-1;
-
-done:
-	return token;
-}
-
-
-void FileScope::HandleVariableReference(TSNode node, ScopeHandle scopeHandle)
-{
-	Scope* scope = GetScope(scopeHandle);
-	if(auto token = HandleVariableReferenceFromScope(node, scope, this))
-		tokens.push_back(*token);
-}
 
 static ScopeDeclaration AddUsingToScope(TSNode node, const GapBuffer* buffer, Scope* scope, TypeHandle type, DeclarationFlags flags)
 {
@@ -306,6 +222,45 @@ static ScopeDeclaration AddEntryToScope(TSNode node, const GapBuffer* buffer, Sc
 	
 	scope->Add(GetIdentifierHash(node, buffer), entry);
 	return entry;
+}
+
+void FileScope::HandleNamespaceImport(TSNode node, Cursor& cursor, TypeHandle& handle, DeclarationFlags& flags)
+{
+	cursor.Child();
+	cursor.Sibling();
+	auto nameNode = cursor.Current();
+	auto startOffset = ts_node_start_byte(nameNode) + 1;
+	auto endOffset = ts_node_end_byte(nameNode) - 1;
+	buffer_view view = buffer_view(startOffset, endOffset, buffer);
+	auto moduleNameHash = StringHash(view);
+
+	// copy and pasted from handle import node
+	if (auto mod = g_modules.Read(moduleNameHash))
+	{
+		if (mod.value()->moduleFile->status == Status::dirty)
+			loadFutures.push_back(std::async(std::launch::async, HandleLoad, mod.value()->moduleFileHash));
+	}
+	else
+	{
+		auto moduleName = view.Copy();
+		if (auto modulePath = FindModuleFilePath(moduleName))
+		{
+			// then we need to create the module.
+			auto mod = RegisterModule(moduleName, *modulePath);
+			loadFutures.push_back(std::async(std::launch::async, HandleLoad, mod->moduleFileHash));
+		}
+	}
+
+	if (auto modopt = g_modules.Read(moduleNameHash))
+	{
+		auto mod = *modopt;
+		handle.fileIndex = mod->moduleFile->fileIndex;
+		handle.index = 0; // 0?
+		handle.scope = mod->moduleFile->file;
+		flags = flags | DeclarationFlags::Evaluated;
+	}
+
+	cursor.Parent();
 }
 
 
@@ -397,6 +352,13 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope,
 		}
 
 		rhs = cursor.Current();
+
+		auto rhsType = ts_node_symbol(rhs);
+		if (rhsType == g_constants.import) // this is probably the wrong place to do this, but whatever.
+		{
+			HandleNamespaceImport(rhs, cursor, handle, flags);
+		}
+
 	}
 	else if (expressionType == g_constants.funcDefinition)
 	{
@@ -441,7 +403,6 @@ void FileScope::HandleNamedDecl(const TSNode nameNode, ScopeHandle currentScope,
 			}
 		}
 	}
-
 	else
 	{
 		// unresolved type?
@@ -707,6 +668,15 @@ void FileScope::FindDeclarations(TSNode scopeNode, ScopeHandle scope,  bool& exp
 			_nodeToScopes.insert(std::make_pair(node.id, scope));
 			structs.push_back(node);
 		}
+		else if (type == g_constants.import)
+		{
+			HandleImportNode(node);
+		}
+		else if (type == g_constants.load)
+		{
+			HandleLoadNode(node);
+		}
+
 
 	} while (cursor.Sibling());
 
@@ -887,104 +857,86 @@ TypeHandle FileScope::HandleFuncDefinitionNode(TSNode node, ScopeHandle currentS
 
 
 
-Module* RegisterModule(std::string moduleName, std::filesystem::path path);
-std::optional<std::filesystem::path> FindModuleFilePath(std::string name);
+void FileScope::HandleImportNode(TSNode node)
+{
+	// import apparently just imports the exported list from a module / file (?) into the current scope.
+	// this can maybe just be done like 'using' but i don't know if there is something more subtle going on with regard to overload resolution or not.
 
+	auto nameNode = ts_node_named_child(node, 0);
+	auto startOffset = ts_node_start_byte(nameNode) + 1;
+	auto endOffset = ts_node_end_byte(nameNode) - 1;
+	buffer_view view = buffer_view(startOffset, endOffset, buffer);
+	auto moduleNameHash = StringHash(view);
+	imports.push_back(moduleNameHash);
 
+	if (auto mod = g_modules.Read(moduleNameHash))
+	{
+		if (mod.value()->moduleFile->status == Status::dirty)
+			loadFutures.push_back(std::async(std::launch::async, HandleLoad, mod.value()->moduleFileHash));
+	}
+	else
+	{
+		auto moduleName = view.Copy();
+		if (auto modulePath = FindModuleFilePath(moduleName))
+		{
+			// then we need to create the module.
+			auto mod = RegisterModule(moduleName, *modulePath);
+			loadFutures.push_back(std::async(std::launch::async, HandleLoad, mod->moduleFileHash));
+		}
+	}
+}
 
+void FileScope::HandleLoadNode(TSNode node)
+{
+	// a load actually puts a file into the module's scope. It doesn't matter which file the load occurs in.
+
+	auto nameNode = ts_node_named_child(node, 0);
+	auto startOffset = ts_node_start_byte(nameNode) + 1;
+	auto endOffset = ts_node_end_byte(nameNode) - 1;
+	buffer_view view = buffer_view(startOffset, endOffset, buffer);
+	// get the current directory, and append the load name to it.
+	if (auto currentDirectory = g_filePaths.Read(documentHash))
+	{
+		auto path = std::filesystem::path(currentDirectory.value());
+		path.replace_filename(view.Copy());
+		auto str = path.string();
+		auto loadNameHash = StringHash(str);
+		if (!g_filePaths.Read(loadNameHash))
+		{
+			g_filePaths.Write(loadNameHash, str);
+		}
+
+		loads.push_back(loadNameHash);
+
+		if (auto fileOpt = g_fileScopes.Read(loadNameHash))
+		{
+			auto file = fileOpt.value();
+			if (file->status == Status::dirty)
+				loadFutures.push_back(std::async(std::launch::async, HandleLoad, loadNameHash));
+		}
+		else
+		{
+			loadFutures.push_back(std::async(std::launch::async, HandleLoad, loadNameHash));
+		}
+
+	}
+
+	// else raise diagnostic that this load was not found
+}
 
 void FileScope::CreateTopLevelScope(TSNode node, ScopeStack& stack, bool& exporting)
 {
-	
-	/*
-	auto builtinScopeHandle = AllocateScope({ 0 }, { UINT16_MAX }, false);
-	auto builtinScope = GetScope(builtinScopeHandle);
-	InitBuiltinScope(builtinScope, this);
-	*/
-
 	file = AllocateScope(node, { UINT16_MAX }, false);
+	auto self = AllocateType();
+	auto king = &types[self.index];
+	king->name = "namespace";
+
 	loads.push_back(StringHash("builtin"));
 	//if(documentHash != preloadHash)
 		//loads.push_back(preloadHash);
 
 
-	// uhhh just do all the imports now!
-	//auto named_count = ts_node_named_child_count(node);
-	auto cursor = ts_tree_cursor_new(node);
-	if (ts_tree_cursor_goto_first_child(&cursor))
-	{
-		do
-		{
-			// this doesn't respect namespaces;
-			auto current = ts_tree_cursor_current_node(&cursor);
-			if (ts_node_symbol(current) == g_constants.import)
-			{
-				auto nameNode = ts_node_named_child(current, 0);
-				auto startOffset = ts_node_start_byte(nameNode) + 1;
-				auto endOffset = ts_node_end_byte(nameNode) - 1;
-				buffer_view view = buffer_view(startOffset, endOffset, buffer);
-				auto moduleNameHash = StringHash(view);
-				imports.push_back(moduleNameHash);
-
-				if (auto mod = g_modules.Read(moduleNameHash))
-				{
-					if(mod.value()->moduleFile->status == Status::dirty)
-						loadFutures.push_back( std::async(std::launch::async, HandleLoad, mod.value()->moduleFileHash));
-				}
-				else
-				{
-					auto moduleName = view.Copy();
-					if (auto modulePath = FindModuleFilePath(moduleName))
-					{
-						// then we need to create the module.
-						auto mod = RegisterModule(moduleName, *modulePath);
-						loadFutures.push_back(std::async(std::launch::async, HandleLoad, mod->moduleFileHash));
-					}
-				}
-			}
-
-			// this doesn't respect non-top-level loads.
-			// i think we also might need the path for this, unfortunately.
-			if (ts_node_symbol(current) == g_constants.load)
-			{
-				auto nameNode = ts_node_named_child(current, 0);
-				auto startOffset = ts_node_start_byte(nameNode) + 1;
-				auto endOffset = ts_node_end_byte(nameNode) - 1;
-				buffer_view view = buffer_view(startOffset, endOffset, buffer);
-				// get the current directory, and append the load name to it.
-				if (auto currentDirectory = g_filePaths.Read(documentHash))
-				{
-					auto path = std::filesystem::path(currentDirectory.value());
-					path.replace_filename(view.Copy());
-					auto str = path.string();
-					auto loadNameHash = StringHash(str);
-					if (!g_filePaths.Read(loadNameHash))
-					{
-						g_filePaths.Write(loadNameHash, str);
-					}
-
-					loads.push_back(loadNameHash);
-				}
-			}
-		} while (ts_tree_cursor_goto_next_sibling(&cursor));
-	}
-
-	for (auto& load : loads)
-	{
-		if (auto fileOpt = g_fileScopes.Read(load))
-		{
-			auto file = fileOpt.value();
-			if (file->status != Status::dirty)
-				continue;
-		}
-
-		loadFutures.push_back(std::async(std::launch::async, HandleLoad, load));
-	}
-
-
 	FindDeclarations(node, file, exporting);
-
-	ts_tree_cursor_delete(&cursor);
 }
 
 
@@ -995,13 +947,6 @@ void FileScope::CheckScope(Scope* scope)
 	for (int i = 0; i < size; i++)
 	{
 		auto decl = scope->GetDeclFromIndex(i);
-
-		if (decl->HasFlags(DeclarationFlags::Expression))
-		{
-			// probably do something here.
-
-
-		}
 
 		if (!decl->HasFlags(DeclarationFlags::Evaluated))
 		{
@@ -1083,46 +1028,7 @@ void FileScope::WaitForDependencies()
 	{
 		future.wait();
 	}
-
-
-	/*
-	for (auto& loadHash : loads)
-	{
-		if (auto loadopt = g_fileScopes.Read(loadHash))
-		{
-			auto load = *loadopt;
-
-			std::unique_lock<std::mutex> lock(load->declarationsFoundMutex);
-			load->declarationsFoundCondition.wait(lock, [=] {return load->declarationsFound; });
-		}
-	}
-	*/
-
-	// i think this is ok!? however, recursive loads will deadlock.
-	/*
-	{
-		std::lock_guard lock{ declarationsFoundMutex };
-		declarationsFound = true;
-	}
-	declarationsFoundCondition.notify_all();
-
-
-	for (auto& import : imports)
-	{
-		if(auto modopt = g_modules.Read(import))
-		{ 
-			auto mod = *modopt;
-			auto file = mod->moduleFile;
-
-			std::unique_lock<std::mutex> lock(file->declarationsFoundMutex);
-			file->declarationsFoundCondition.wait(lock, [=] {return file->declarationsFound; });
-
-		}
-	}
-	*/
 }
-
-
 
 
 void FileScope::Build()
@@ -1152,392 +1058,7 @@ void FileScope::Build()
 	status = Status::scopesBuilt;
 }
 
-void FileScope::DoTokens2()
-{
-	/*
-	auto thread = ::GetCurrentThread();
-	auto pathStatus ="tokens: " + documentHash.debug_name;
-	auto pathLength = strlen(pathStatus.c_str()) + 1;
-	wchar_t* wide = new wchar_t[pathLength];
 
-	size_t converted;
-	mbstowcs_s(&converted, wide, pathLength, pathStatus.c_str(), _TRUNCATE);
-	SetThreadDescription(thread, wide);
-
-	delete[] wide;
-	*/
-
-	if (status == Status::scopesBuilt)
-	{
-		WaitForDependencies();
-		DoTypeCheckingAndInference(currentTree);
-
-		status = Status::checked;
-	}
-
-	auto root = ts_tree_root_node(currentTree);
-	ScopeStack stack;
-	stack.scopes.push_back(file);
-	std::vector<TSNode> unresolvedEntry;
-	std::vector<int> unresolvedTokenIndex;
-
-	bool exporting = true;
-	bool skipNextImperative = false;
-
-	static const auto queryText =
-		"(function_definition) @func_defn" // hopefully this matches before the identifiers does.
-		"(for_loop) @func_defn"			   // not really a function definition but it shares the same structure
-		"(imperative_scope) @imperative.scope"
-		"(struct_definition) @data.scope"
-		"(enum_definition) @data.scope"
-		"(member_access . (_) (_) @member_rhs )"
-		"(identifier) @var_ref"
-		"(block_end) @block_end"
-		"(export_scope_directive) @export"
-		"(file_scope_directive) @file"
-		"(argument_name) @argument"
-		;
-
-	uint32_t error_offset;
-	TSQueryError error_type;
-
-	auto query = ts_query_new(
-		g_jaiLang,
-		queryText,
-		(uint32_t)strlen(queryText),
-		&error_offset,
-		&error_type
-	);
-
-	TSQueryCursor* queryCursor = ts_query_cursor_new();
-	ts_query_cursor_exec(queryCursor, query, root);
-
-	TSQueryMatch match;
-	uint32_t index;
-
-	enum class ScopeMarker
-	{
-		func_defn,
-		imperativeScope,
-		structDecl,
-		member_rhs,
-		var_ref,
-		block_end,
-		export_scope,
-		file_scope,
-		argument,
-	};
-
-	int identifiersToSkip = 0;
-
-	Cursor functionBodyFinder;
-	int skipPopCount = 0;
-
-	offsetToHandle.Clear();
-	offsetToHandle.Add(2, file);
-
-	while (ts_query_cursor_next_capture(queryCursor, &match, &index))
-	{
-		ScopeMarker captureType = (ScopeMarker)match.captures[index].index;
-		auto node = match.captures[index].node;
-		switch (captureType)
-		{
-		case ScopeMarker::structDecl:
-		{
-			if (!ContainsScope(node.id))
-			{
-				skipPopCount++;
-				break;
-			}
-
-			auto scopeHandle = GetScopeFromNodeID(node.id);
-			stack.scopes.push_back(scopeHandle);
-
-			// also build up the list of scope contexts
-			offsetToHandle.Add(ts_node_start_byte(node), scopeHandle);
-			break;
-		}
-		case ScopeMarker::func_defn:
-		{
-			skipNextImperative = true;
-
-			if (!ContainsScope(node.id)) // likely some error state
-			{
-				skipPopCount++;
-				break;
-			}
-
-			auto scopeHandle = GetScopeFromNodeID(node.id);
-			stack.scopes.push_back(scopeHandle);
-
-			offsetToHandle.Add(ts_node_start_byte(node), scopeHandle);
-			break;
-		}
-		case ScopeMarker::imperativeScope:
-		{
-			if (skipNextImperative)
-			{
-				skipNextImperative = false;
-				break;
-			}
-
-			if (!ContainsScope(node.id))
-			{
-				skipPopCount++;
-				break;
-				/*
-				// scope in an if statement or something probably.
-				auto scopeHandle = AllocateScope(node, stack.scopes.back());
-				FindDeclarations(node, scopeHandle, stack, exporting);
-				for (auto& use : usings)
-				{
-					auto type = GetType(use.second);
-					auto memberScope = GetScope(type->members);
-					memberScope->InjectMembersTo(GetScope(use.first));
-				}
-				usings.clear();
-				*/
-			}
-
-			auto scopeHandle = GetScopeFromNodeID(node.id);
-			stack.scopes.push_back(scopeHandle);
-
-			offsetToHandle.Add(ts_node_start_byte(node), scopeHandle);
-			break;
-		}
-		case ScopeMarker::member_rhs:
-		{
-			HandleMemberReference(node, stack.scopes.back());
-			identifiersToSkip++;
-			break;
-		}
-		case ScopeMarker::argument:
-		{
-			// we need to go up two nodes to get the function call
-			auto identifier = ts_node_named_child(node, 0);
-			auto func = ts_node_parent(ts_node_parent(node));
-			auto functionName = ts_node_named_child(func, 0);
-			FileScope* declFile;
-			Scope* declScope;
-
-			auto declIndex = GetDeclarationForNodeFromScope(functionName, this, GetScope(stack.scopes.back()), &declFile, &declScope);
-			if (declIndex >= 0)
-			{
-				auto decl = declScope->GetDeclFromIndex(declIndex);
-				auto members = declFile->GetScope(decl->type.scope);
-				if( auto token = HandleVariableReferenceFromScope(identifier, members, declFile) )
-					tokens.push_back(*token);
-			}
-			else
-			{
-				HandleVariableReference(identifier, stack.scopes.back());
-			}
-
-			identifiersToSkip++;
-			break;
-		}
-		case ScopeMarker::var_ref:
-		{
-			if (identifiersToSkip > 0)
-			{
-				identifiersToSkip--;
-				break;
-			}
-
-			HandleVariableReference(node, stack.scopes.back());
-			break;
-		}
-		case ScopeMarker::block_end:
-		{
-			if (skipPopCount > 0)
-			{
-				skipPopCount--;
-				break;
-			}
-
-			stack.scopes.pop_back();
-			break;
-		}
-		case ScopeMarker::export_scope:
-		{
-			exporting = true;
-			break;
-		}
-		case ScopeMarker::file_scope:
-		{
-			exporting = false;
-			break;
-		}
-
-		default:
-			break;
-		}
-	}
-
-	ts_query_delete(query);
-	ts_query_cursor_delete(queryCursor);
-}
-
-
-/*
-void FileScope::DoTokens(TSNode root, TSInputEdit* edits, int editCount)
-{
-	const static auto queryText =
-		"(function_definition) @func_defn" // hopefully this matches before the identifiers does.
-		"(for_loop) @func_defn"			   // this is not actually a func definition but it does have the same structure.
-		"(imperative_scope) @imperative.scope"
-		"(data_scope) @data.scope"
-		"(member_access . (_) (_) @member_rhs )"
-		"(identifier) @var_ref"
-		"(block_end) @block_end"
-		"(export_scope_directive) @export"
-		"(file_scope_directive) @file"
-		;
-
-	uint32_t error_offset;
-	TSQueryError error_type;
-
-	auto query = ts_query_new(
-		g_jaiLang,
-		queryText,
-		(uint32_t)strlen(queryText),
-		&error_offset,
-		&error_type
-	);
-
-	TSQueryCursor* queryCursor = ts_query_cursor_new();
-	ts_query_cursor_exec(queryCursor, query, root);
-
-	TSQueryMatch match;
-	uint32_t index;
-
-	enum class ScopeMarker
-	{
-		func_defn,
-		imperativeScope,
-		dataScope,
-		member_rhs,
-		var_ref,
-		block_end,
-		export_scope,
-		file_scope,
-	};
-
-	ScopeStack stack;
-	stack.scopes.push_back(file);
-	std::vector<TSNode> unresolvedEntry;
-	std::vector<int> unresolvedTokenIndex;
-
-	bool exporting = true;
-	bool skipNextImperative = false;
-	int identifiersToSkip = 0;
-	int skipPopCount = 0;
-
-	Hashmap newOffsets;
-	newOffsets.Add(2, file); // why is this 2? i don't know.
-	tokens.clear();
-
-	while (ts_query_cursor_next_capture(queryCursor, &match, &index))
-	{
-		ScopeMarker captureType = (ScopeMarker)match.captures[index].index;
-		auto node = match.captures[index].node;
-		switch (captureType)
-		{
-		
-		
-		case ScopeMarker::func_defn:
-			skipNextImperative = true;
-			[[fallthrough]];
-		case ScopeMarker::dataScope:
-		{
-			auto scopeHandle = GetScopeFromOffset(node.context[0], edits, editCount);
-			scopeHandle = scopeHandle ? scopeHandle : TryGetScopeFromNodeID(node.id);
-
-			if(!scopeHandle)
-			{
-				skipPopCount++;
-				break;
-			}
-
-			stack.scopes.push_back(*scopeHandle);
-			newOffsets.Add(node.context[0], *scopeHandle);
-			SetScopePresentBit(*scopeHandle);
-			
-			break;
-		}
-		case ScopeMarker::imperativeScope:
-		{
-			if (skipNextImperative)
-			{
-				skipNextImperative = false;
-				break;
-			}
-
-			auto scopeHandle = GetScopeFromOffset(node.context[0], edits, editCount);
-
-			if (!scopeHandle)
-			{
-				// naked scope
-				scopeHandle = AllocateScope(node, stack.scopes.back(), true);
-				FindDeclarations(node, *scopeHandle, exporting);
-			}
-
-			stack.scopes.push_back(*scopeHandle);
-			newOffsets.Add(node.context[0], *scopeHandle);
-			SetScopePresentBit(*scopeHandle);
-			break;
-		}
-		case ScopeMarker::member_rhs:
-		{
-			HandleMemberReference(node, stack.scopes.back());
-			identifiersToSkip++;
-			break;
-		}
-		case ScopeMarker::var_ref:
-		{
-			if (identifiersToSkip > 0)
-			{
-				identifiersToSkip--;
-				break;
-			}
-
-			HandleVariableReference(node, stack.scopes.back());
-			break;
-		}
-		case ScopeMarker::block_end:
-		{
-			if (skipPopCount > 0)
-			{
-				skipPopCount--;
-				break;
-			}
-
-			stack.scopes.pop_back();
-			break;
-		}
-		case ScopeMarker::export_scope:
-		{
-			exporting = true;
-			break;
-		}
-		case ScopeMarker::file_scope:
-		{
-			exporting = false;
-			break;
-		}
-
-		default:
-			break;
-		}
-	}
-
-
-	offsetToHandle.Clear();
-	offsetToHandle = newOffsets;
-
-	ts_query_delete(query);
-}
-*/
 
 const std::optional<TypeHandle> FileScope::GetTypeFromSymbol(TSNode node, Scope* scope, TSSymbol symbol)
 {
@@ -1591,7 +1112,31 @@ const std::optional<TypeHandle> FileScope::GetTypeFromSymbol(TSNode node, Scope*
 		auto declIndex = GetDeclarationForNodeFromScope(functionName, this, scope, &declFile, &declScope);
 		if (declIndex >= 0)
 		{
+
+			// in case you are tempted to uncomment this code, know that it causes infinite loops.
+			/*
+			if (!declScope->checked)
+			{
+				declFile->CheckScope(declScope);
+			}
+			*/
+
 			auto decl = declScope->GetDeclFromIndex(declIndex);
+			if (!decl->HasFlags(DeclarationFlags::Evaluated))
+			{
+				auto node = ConstructRhsFromDecl(*decl, currentTree);
+
+				if (auto typeHandle = EvaluateNodeExpressionType(node, scope))
+				{
+					decl->type = *typeHandle;
+					decl->flags = decl->flags | DeclarationFlags::Evaluated;
+				}
+				else
+				{
+					return std::nullopt;
+				}
+			}
+
 			// and check the scope of the function's type, to infer returns
 			auto funcScope = declFile->GetScope(decl->type.scope);
 			if (!funcScope->checked)
@@ -1602,7 +1147,10 @@ const std::optional<TypeHandle> FileScope::GetTypeFromSymbol(TSNode node, Scope*
 				return king->returnTypes[0];
 		}
 	}
-
+	else if (symbol == g_constants.memberAccess)
+	{
+		return EvaluateMemberAccessType(node, this, scope);
+	}
 
 	return std::nullopt;
 }
