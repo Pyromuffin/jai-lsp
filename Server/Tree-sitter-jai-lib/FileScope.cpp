@@ -1189,8 +1189,11 @@ const std::optional<TypeHandle> FileScope::EvaluateNodeExpressionType(TSNode nod
 				}
 				else
 				{
-					auto node = ConstructRhsFromDecl(*decl, currentTree);
-					if (auto type = EvaluateNodeExpressionType(node, scope))
+					auto rhsNode = ConstructRhsFromDecl(*decl, currentTree);
+					if (rhsNode.id == node.id)
+						return std::nullopt;
+
+					if (auto type = EvaluateNodeExpressionType(rhsNode, scope))
 					{
 						auto memberScope = GetScope(type->scope);
 						if (memberScope != startScope && !memberScope->checked)
